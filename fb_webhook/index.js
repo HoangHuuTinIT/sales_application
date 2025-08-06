@@ -7,8 +7,7 @@ const PORT = process.env.PORT || 3000;
 app.use(bodyParser.json());
 
 app.get('/webhook', (req, res) => {
-  const VERIFY_TOKEN = 'webhook_live';
-
+  const VERIFY_TOKEN = process.env.FB_VERIFY_TOKEN || 'webhook_live';
   const mode = req.query['hub.mode'];
   const token = req.query['hub.verify_token'];
   const challenge = req.query['hub.challenge'];
