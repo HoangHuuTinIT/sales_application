@@ -11,27 +11,47 @@ class StatisticsYearService {
   static Future<List<Map<String, dynamic>>> getSummaryForYear(int year) async {
     final firestore = FirebaseFirestore.instance;
 
-    final snapshot = await firestore
-        .collection('delivery_products')
-        .where('status', isEqualTo: 'Hoàn tất thanh toán')
-        .get();
+    final soldSnapshot = await firestore.collection('Products_sold').get();
 
+    /// Gom theo tháng
     final Map<int, Map<String, dynamic>> grouped = {
       for (var i = 1; i <= 12; i++) i: {'month': i, 'quantity': 0, 'total': 0.0},
     };
 
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      final endTime = (data['delivery_end_time'] as Timestamp).toDate();
-      if (endTime.year == year) {
-        final month = endTime.month;
-        grouped[month]!['quantity'] += data['quantity'] as int;
-        grouped[month]!['total'] += (data['total'] as num).toDouble();
-      }
+    for (var soldDoc in soldSnapshot.docs) {
+      final sold = soldDoc.data() as Map<String, dynamic>;
+
+      final deliveryId = sold['deliveryProductsId'] as String?;
+      final orderedId = sold['orderedProductsId'] as String?;
+      if (deliveryId == null || orderedId == null) continue;
+
+      /// JOIN delivery_products => lấy delivery_end_time
+      final deliveryDoc = await firestore.collection('delivery_products').doc(deliveryId).get();
+      if (!deliveryDoc.exists) continue;
+
+      final deliveryEndTime = (deliveryDoc['delivery_end_time'] as Timestamp?)?.toDate();
+      if (deliveryEndTime == null) continue;
+
+      /// Chỉ lấy đúng năm
+      if (deliveryEndTime.year != year) continue;
+
+      final month = deliveryEndTime.month;
+
+      /// JOIN OrderedProducts => lấy quantity & total
+      final orderedDoc = await firestore.collection('OrderedProducts').doc(orderedId).get();
+      if (!orderedDoc.exists) continue;
+
+      final ordered = orderedDoc.data() as Map<String, dynamic>;
+      final quantity = ordered['quantity'] as int? ?? 0;
+      final total = ordered['total'] as num? ?? 0;
+
+      grouped[month]!['quantity'] += quantity;
+      grouped[month]!['total'] += total;
     }
 
     return List.generate(12, (i) => grouped[i + 1]!);
   }
+
 
   /// ✅ Xuất & chia sẻ file Excel
   static Future<void> exportToExcelAndShare(List<Map<String, dynamic>> data, int year) async {

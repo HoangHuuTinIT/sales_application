@@ -26,12 +26,12 @@ class _CustomerProductsScreenState extends State<CustomerOrderScreen> {
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text('Bạn chưa có đơn hàng nào.'));
           }
-
-          // 📌 LỌC đơn hàng
+          // 📌 LỌC đơn hàng (ĐÃ FIX)
           final orders = snapshot.data!.docs.where((doc) {
             final status = (doc['status'] ?? '').toString();
-            return status != 'Hoàn tất thanh toán';
+            return status != 'Hoàn tất thanh toán' && status != 'Đơn hàng bị hủy';
           }).toList();
+
 
           if (orders.isEmpty) {
             return const Center(child: Text('Bạn chưa có đơn hàng nào.'));
@@ -44,16 +44,32 @@ class _CustomerProductsScreenState extends State<CustomerOrderScreen> {
               final doc = orders[index];
               final data = doc.data() as Map<String, dynamic>;
 
-              return FutureBuilder<String?>(
-                future: _service.getProductImage(data['productName']),
-                builder: (context, imageSnapshot) {
-                  final imageUrl = imageSnapshot.data;
+              return FutureBuilder<Map<String, dynamic>?>(
+                future: _service.getProductById(data['productId']),
+                builder: (context, productSnapshot) {
+                  if (productSnapshot.connectionState == ConnectionState.waiting) {
+                    return const ListTile(
+                      title: Text('Đang tải sản phẩm...'),
+                    );
+                  }
+
+                  final productData = productSnapshot.data;
+
+                  if (productData == null) {
+                    return const ListTile(
+                      title: Text('Sản phẩm không tồn tại'),
+                    );
+                  }
+
+                  final productName = productData['name'] ?? 'Không tên';
+                  final imageUrls = productData['imageUrls'];
+                  final imageUrl = (imageUrls is List && imageUrls.isNotEmpty) ? imageUrls[0] : null;
 
                   return ListTile(
                     leading: imageUrl != null
                         ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover)
                         : const Icon(Icons.image_not_supported),
-                    title: Text(data['productName'] ?? ''),
+                    title: Text(productName),
                     subtitle: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
@@ -94,6 +110,7 @@ class _CustomerProductsScreenState extends State<CustomerOrderScreen> {
                   );
                 },
               );
+
             },
           );
         },

@@ -82,6 +82,9 @@ class _CartItemsScreenState extends State<CartItemsScreen> {
     final selectedItems = _cartItems
         .where((item) => _selectedProductIds.contains(item['productId']))
         .toList();
+    for (var item in selectedItems) {
+      print('✅ selectedItem: $item');
+    }
 
     Navigator.push(
       context,

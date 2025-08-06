@@ -1,4 +1,3 @@
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
@@ -6,49 +5,55 @@ class PackagedProductServices {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  Stream<List<Map<String, dynamic>>> get packagedProductsStream {
-    return _firestore
+  Stream<List<Map<String, dynamic>>> get packagedProductsStream async* {
+    yield* _firestore
         .collection('OrderedProducts')
         .where('status', isEqualTo: 'Đóng gói hoàn tất')
         .snapshots()
-        .map((snapshot) => snapshot.docs.map((doc) {
-      final data = doc.data() as Map<String, dynamic>;
-      data['id'] = doc.id; // 👈 thêm id
-      return data;
-    }).toList());
+        .asyncMap((snapshot) async {
+      final List<Map<String, dynamic>> results = [];
+
+      for (final doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+
+        results.add({
+          'id': doc.id,
+          'orderedProductsId': doc.id,
+          'quantity': data['quantity'],
+          'paymentMethod': data['paymentMethod'],
+          'status': data['status'],
+          'total': data['total'],
+          'createdAt': data['createdAt'],
+          'userId': data['userId'],
+          'productId': data['productId'],
+        });
+      }
+
+      return results;
+    });
   }
 
-
   void loadPackagedProducts() {
-    // Chỉ để trigger StreamBuilder — có thể không cần code gì thêm
+    // Không cần gì thêm
   }
 
   Future<void> acceptProduct(Map<String, dynamic> product) async {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    final userDoc = await _firestore.collection('users').doc(user.uid).get();
-    final userData = userDoc.data()!;
-
-    await _firestore.collection('delivery_products').add({
-      'productId': product['productId'],
-      'nameDelivery': userData['name'],
-      'phoneDelivery': userData['phone'],
-      'emailDelivery': userData['email'],
-      'productName': product['productName'],
-      'quantity': product['quantity'],
-      'total': product['total'],
-      'nameCustomer': product['name'],
-      'addressCustomer': product['address'],
-      'phoneCustomer': product['phone'],
-      'paymentMethod': product['paymentMethod'],
-      'status': 'Shipper nhận hàng',
+    // 👉 Bước 1: Thêm mới delivery_products KHÔNG chứa status nữa
+    final docRef = await _firestore.collection('delivery_products').add({
+      'orderedProductsId': product['orderedProductsId'],
+      'deliveryId': user.uid,
       'date_of_receipt': DateTime.now(),
-      // 👉 Thêm createdAt gốc của OrderedProducts
-      'createdAt': product['createdAt'],
-      'userId' :product['userId'],
     });
 
+    // Bước 2: Cập nhật lại chính nó để thêm deliveryProductsId
+    await docRef.update({
+      'deliveryProductsId': docRef.id,
+    });
+
+    // 👉 Bước 3: Update OrderedProducts -> status = 'Shipper nhận hàng'
     await _firestore
         .collection('OrderedProducts')
         .doc(product['id'])

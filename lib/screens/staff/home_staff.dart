@@ -1,4 +1,5 @@
 import 'package:ban_hang/screens/staff/order_management.dart';
+import 'package:ban_hang/screens/staff/shipping_company.dart';
 import 'package:ban_hang/screens/staff/statistics_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:ban_hang/screens/staff/categories_management.dart';
@@ -78,6 +79,21 @@ class _HomeStaffState extends State<HomeStaff> {
               padding: const EdgeInsets.symmetric(vertical: 16),
             ),
           ),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ShippingCompanyScreen()),
+              );
+            },
+            icon: const Icon(Icons.local_shipping),
+            label: const Text('Cài đặt đơn vị vận chuyển'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.orangeAccent,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+            ),
+          ),
+
         ],
       ),
     );

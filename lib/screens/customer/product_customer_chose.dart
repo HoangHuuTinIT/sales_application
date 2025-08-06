@@ -669,31 +669,107 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
             onPressed: () {
               final price = (product!['price'] as num).toDouble();
               final finalPrice = hasDiscount ? price * (1 - discount / 100) : price;
+              int quantity = 1;
+              final controller = TextEditingController(text: '1');
+              double totalPrice = finalPrice;
 
-              message.checkSignInOrNot(
+              showDialog(
                 context: context,
-                onLoggedIn: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => BuyProductsScreen(
-                        selectedItems: [
-                          {
-                            'productId': product!['productId'],
-                            'productName': product!['name'],
-                            'productImage': (product!['imageUrls'] as List).isNotEmpty
-                                ? product!['imageUrls'][0]
-                                : null,
-                            'quantity': 1,
-                            'totalAmount': finalPrice,
-                          }
+                builder: (context) {
+                  return StatefulBuilder(
+                    builder: (context, setStateDialog) {
+                      return AlertDialog(
+                        title: const Text('Mua ngay'),
+                        content: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (product?['imageUrls'] != null && (product!['imageUrls'] as List).isNotEmpty)
+                              Image.network(product!['imageUrls'][0], height: 100),
+                            const SizedBox(height: 10),
+                            Text('Giá: ${message.formatCurrency(finalPrice)}'),
+                            Text('Tổng tiền: ${message.formatCurrency(totalPrice)}',
+                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                            const SizedBox(height: 10),
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.remove),
+                                  onPressed: () {
+                                    if (quantity > 1) {
+                                      quantity--;
+                                      controller.text = quantity.toString();
+                                      totalPrice = quantity * finalPrice;
+                                      setStateDialog(() {});
+                                    }
+                                  },
+                                ),
+                                Expanded(
+                                  child: TextFormField(
+                                    controller: controller,
+                                    keyboardType: TextInputType.number,
+                                    onChanged: (value) {
+                                      final parsed = int.tryParse(value);
+                                      if (parsed != null && parsed > 0) {
+                                        quantity = parsed;
+                                        totalPrice = quantity * finalPrice;
+                                        setStateDialog(() {});
+                                      }
+                                    },
+                                    textAlign: TextAlign.center,
+                                  ),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.add),
+                                  onPressed: () {
+                                    quantity++;
+                                    controller.text = quantity.toString();
+                                    totalPrice = quantity * finalPrice;
+                                    setStateDialog(() {});
+                                  },
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('Hủy'),
+                          ),
+                          ElevatedButton(
+                            onPressed: () {
+                              Navigator.pop(context); // đóng dialog trước
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => BuyProductsScreen(
+                                    selectedItems: [
+                                      {
+                                        'productId': product!['productId'] ?? product!['id'], // fallback nếu key khác
+                                        'productName': product!['name'],
+                                        'productImage': (product!['imageUrls'] as List).isNotEmpty
+                                            ? product!['imageUrls'][0]
+                                            : null,
+                                        'quantity': quantity,
+                                        'price': finalPrice, // ✅ THÊM dòng này
+                                        'totalAmount': totalPrice,
+                                      }
+                                    ],
+
+                                  ),
+                                ),
+                              );
+                            },
+                            child: const Text('OK'),
+                          ),
                         ],
-                      ),
-                    ),
+                      );
+                    },
                   );
                 },
               );
             },
+
             label: const Text('Mua ngay'),
             icon: const Icon(Icons.payment),
           ),
@@ -717,8 +793,6 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
       ),
     );
   }
-
-
   Widget _buildAddToCartDialog(BuildContext context, double price, int stockQuantity) {
     int quantity = 1;
     final controller = TextEditingController(text: '1');
@@ -809,8 +883,6 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
               },
               child: const Text('Thêm vào giỏ hàng'),
             ),
-
-
           ],
         );
       },

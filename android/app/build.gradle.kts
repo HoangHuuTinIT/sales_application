@@ -27,7 +27,7 @@ android {
         applicationId = "com.example.ban_hang"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 21
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -45,4 +45,8 @@ android {
 
 flutter {
     source = "../.."
+}
+dependencies {
+    implementation ("com.facebook.android:facebook-android-sdk:latest.release")
+    implementation("com.google.android.material:material:1.11.0")
 }

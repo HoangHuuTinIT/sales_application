@@ -57,9 +57,17 @@ dependencies:
   fl_chart: ^0.66.0
   image_picker: ^1.0.7
   image: ^4.1.7
-  video_compress: ^3.1.0
-  ffmpeg_kit_flutter: ^4.5.1
-  better_player: ^0.0.83
+  qr_flutter: ^4.1.0
+  crypto: ^3.0.3
+  flutter_stripe: ^11.5.0
+  flutter_facebook_auth: ^6.1.0
+  barcode: ^2.2.4
+  barcode_image: ^2.0.1
+  phone_number: ^2.1.0
+
+
+
+
 
 dev_dependencies:
   flutter_test:
@@ -88,6 +96,9 @@ flutter:
     - assets/images/logo_quandoanmuasam.png
     - assets/images/background_no_image.png
     - assets/images/logo_google.png
+    - assets/images/QR_PAYMENT.jpg
+    - assets/images/iconfb.jpg
+    - assets/images/iconfb.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

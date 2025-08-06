@@ -14,15 +14,11 @@ class CustomerOrderService {
     return _orders.where('userId', isEqualTo: user.uid).snapshots();
   }
 
-  Future<String?> getProductImage(String productName) async {
-    final snapshot = await _products
-        .where('name', isEqualTo: productName)
-        .limit(1)
-        .get();
-
-    if (snapshot.docs.isNotEmpty) {
-      final data = snapshot.docs.first.data();
-      final imageUrls = data['imageUrls'];
+  Future<String?> getProductImage(String productId) async {
+    final snapshot = await _products.doc(productId).get();
+    if (snapshot.exists) {
+      final data = snapshot.data();
+      final imageUrls = data?['imageUrls'];
       if (imageUrls is List && imageUrls.isNotEmpty) {
         return imageUrls[0];
       }
@@ -30,24 +26,29 @@ class CustomerOrderService {
     return null;
   }
 
+
   /// ✅ Thêm hàm này: Lưu + Xoá
   Future<void> cancelOrderAndSave(String orderId) async {
     final docSnapshot = await _orders.doc(orderId).get();
     if (!docSnapshot.exists) return;
 
+    // Cập nhật status đơn gốc
+    await _orders.doc(orderId).update({
+      'status': 'Đơn hàng bị hủy',
+    });
+
+    // Thêm OrderCancelled siêu gọn
+    await _ordersCancelled.doc(orderId).set({
+      'orderedProductsId': orderId,
+      'cancelledAt': FieldValue.serverTimestamp(),
+    });
+
+    // Nếu cần, update delivery_products
     final data = docSnapshot.data();
-    if (data == null) return;
+    final createdAt = data?['createdAt'];
+    final userId = data?['userId'];
+    final productId = data?['productId'];
 
-    final createdAt = data['createdAt'];
-    final userId = data['userId'];
-    final productId = data['productId'];
-
-    // 👉 Lưu bản sao sang OrderCancelled (vẫn giữ thông tin)
-    data['status'] = 'Đơn hàng bị hủy';
-    data['cancelledAt'] = FieldValue.serverTimestamp();
-    await _ordersCancelled.doc(orderId).set(data);
-
-    // 👉 Update status bên delivery_products (lọc theo điều kiện)
     final deliverySnapshot = await FirebaseFirestore.instance
         .collection('delivery_products')
         .where('createdAt', isEqualTo: createdAt)
@@ -58,9 +59,14 @@ class CustomerOrderService {
     for (final doc in deliverySnapshot.docs) {
       await doc.reference.update({'status': 'Đơn hàng bị hủy'});
     }
+  }
 
-    // 👉 Cuối cùng xoá trong OrderedProducts
-    await _orders.doc(orderId).delete();
+  Future<Map<String, dynamic>?> getProductById(String productId) async {
+    final doc = await _products.doc(productId).get();
+    if (doc.exists) {
+      return doc.data();
+    }
+    return null;
   }
 
 

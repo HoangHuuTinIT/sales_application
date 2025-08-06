@@ -49,13 +49,6 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
     });
   }
 
-  // String formatPhone(String phone) {
-  //   if (phone.startsWith('+84')) {
-  //     return '0${phone.substring(3)}';
-  //   }
-  //   return phone;
-  // }
-
   void _handleSignUp() async {
     if (!_formKey.currentState!.validate() ||
         selectedProvince == null ||
@@ -74,7 +67,7 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
     );
 
     if (verifiedPhone == null) return;
-
+    final avatarUrl = widget.initialData?['avatarUrl'] ?? '';
     final email = widget.initialData?['email'] ?? FirebaseAuth.instance.currentUser?.email;
 
 
@@ -87,7 +80,7 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
 
     setState(() => isLoading = true);
 
-    final errorMessage = await AuthService().completeGoogleSignup(
+    final errorMessage = await AuthService().completeFacebookSignup(
       name: nameController.text.trim(),
       email: email,
       phone: message.formatVNPhone(verifiedPhone),
@@ -96,6 +89,7 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
       ward: selectedWard!.name,
       gender: selectedGender!,
       detailAddress: detailAddressController.text.trim(),
+      avatarUrl: avatarUrl,
     );
 
     setState(() => isLoading = false);

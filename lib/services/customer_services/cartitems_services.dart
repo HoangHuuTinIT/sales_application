@@ -73,15 +73,17 @@ class CartItemsService {
       if (productDoc.exists) {
         final productData = productDoc.data();
         cartItems.add({
-          'productId': productId, // 👈 THÊM DÒNG NÀY để không bị null
+          'productId': productId,
           'productName': productData?['name'] ?? 'Không rõ tên',
           'productImage': productData?['imageUrls'] != null &&
               productData!['imageUrls'].isNotEmpty
               ? productData['imageUrls'][0]
               : null,
-          'quantity': data['quantity'],
-          'totalAmount': data['TotalAmount'],
+          'quantity': data['quantity'] ?? 1,
+          'totalAmount': data['TotalAmount'] ?? 0,
+          'price': productData?['price'] ?? 0, // ✅ THÊM DÒNG NÀY
         });
+
 
       } else {
         print("⚠️ Không tìm thấy sản phẩm với ID: $productId");

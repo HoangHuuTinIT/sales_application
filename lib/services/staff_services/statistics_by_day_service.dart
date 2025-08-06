@@ -14,35 +14,71 @@ class StatisticsDayService {
     final start = DateTime(day.year, day.month, day.day);
     final end = start.add(const Duration(days: 1));
 
-    final snapshot = await firestore
-        .collection('delivery_products')
-        .where('status', isEqualTo: 'Hoàn tất thanh toán')
-        .where('delivery_end_time', isGreaterThanOrEqualTo: start)
-        .where('delivery_end_time', isLessThan: end)
-        .get();
+    // 1️⃣ Lấy tất cả Products_sold
+    final soldSnap = await firestore.collection('Products_sold').get();
 
-    final Map<String, Map<String, dynamic>> grouped = {};
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      final productId = data['productId'];
-      final productName = data['productName'] ?? '';
-      final quantity = data['quantity'] ?? 0;
-      final total = data['total'] ?? 0;
+    final List<Map<String, dynamic>> temp = [];
 
-      grouped.putIfAbsent(productId, () => {
+    for (var soldDoc in soldSnap.docs) {
+      final sold = soldDoc.data();
+      final deliveryProductsId = sold['deliveryProductsId'] as String?;
+      final orderedProductsId = sold['orderedProductsId'] as String?;
+
+      if (deliveryProductsId == null || orderedProductsId == null) continue;
+
+      // 2️⃣ JOIN sang delivery_products
+      final deliveryDoc = await firestore.collection('delivery_products').doc(deliveryProductsId).get();
+      if (!deliveryDoc.exists) continue;
+
+      final deliveryEndTime = (deliveryDoc['delivery_end_time'] as Timestamp?)?.toDate();
+      if (deliveryEndTime == null) continue;
+
+      if (deliveryEndTime.isBefore(start) || deliveryEndTime.isAfter(end)) continue;
+
+      // 3️⃣ JOIN sang OrderedProducts
+      final orderedDoc = await firestore.collection('OrderedProducts').doc(orderedProductsId).get();
+      if (!orderedDoc.exists) continue;
+
+      final ordered = orderedDoc.data();
+      final productId = ordered?['productId'] as String?;
+      final quantity = ordered?['quantity'] as int? ?? 0;
+      final total = ordered?['total'] as num? ?? 0;
+
+      if (productId == null) continue;
+
+      // 4️⃣ JOIN sang Products để lấy tên
+      final productDoc = await firestore.collection('Products').doc(productId).get();
+      final productName = productDoc.exists ? (productDoc['name'] ?? '') : '';
+
+      temp.add({
         'productId': productId,
         'productName': productName,
+        'quantity': quantity,
+        'total': total,
+      });
+    }
+
+    // 5️⃣ Gom nhóm
+    final Map<String, Map<String, dynamic>> grouped = {};
+    for (var item in temp) {
+      final pid = item['productId'] as String;
+      final pname = item['productName'] as String;
+      final qty = item['quantity'] as int;
+      final tot = item['total'] as num;
+
+      grouped.putIfAbsent(pid, () => {
+        'productId': pid,
+        'productName': pname,
         'quantity': 0,
-        'total': 0.0,
+        'total': 0,
       });
 
-      grouped[productId]!['quantity'] += quantity;
-      grouped[productId]!['total'] += total;
+      grouped[pid]!['quantity'] += qty;
+      grouped[pid]!['total'] += tot;
     }
 
     return grouped.values.toList();
   }
-
   /// ✅ Xuất file Excel + chia sẻ
   static Future<void> exportToExcelAndShare(List<Map<String, dynamic>> data, DateTime day) async {
     final status = await Permission.manageExternalStorage.request();

@@ -9,52 +9,94 @@ import 'package:share_plus/share_plus.dart';
 
 class StatisticsMonthService {
   /// Lấy & gộp dữ liệu theo ngày + productId
-  static Future<List<Map<String, dynamic>>> getSummaryForMonth(
-      int year, int month) async {
+  static Future<List<Map<String, dynamic>>> getSummaryForMonth(int year, int month) async {
     final firestore = FirebaseFirestore.instance;
+
     final start = DateTime(year, month, 1);
-    final end = DateTime(year, month + 1, 1);
+    final end = (month == 12)
+        ? DateTime(year + 1, 1, 1)
+        : DateTime(year, month + 1, 1);
 
-    final snapshot = await firestore
-        .collection('delivery_products')
-        .where('status', isEqualTo: 'Hoàn tất thanh toán')
-        .where('delivery_end_time', isGreaterThanOrEqualTo: start)
-        .where('delivery_end_time', isLessThan: end)
-        .get();
+    final soldSnapshot = await firestore.collection('Products_sold').get();
 
-    final Map<String, Map<int, Map<String, dynamic>>> grouped = {};
-    for (var doc in snapshot.docs) {
-      final data = doc.data();
-      final productId = data['productId'];
-      final productName = data['productName'] ?? '';
-      final quantity = data['quantity'] ?? 0;
-      final total = data['total'] ?? 0;
+    final List<Map<String, dynamic>> result = [];
 
-      final date = (data['delivery_end_time'] as Timestamp).toDate();
-      final day = date.day;
+    for (var soldDoc in soldSnapshot.docs) {
+      final sold = soldDoc.data() as Map<String, dynamic>;
 
-      grouped.putIfAbsent(productId, () => {});
-      grouped[productId]!.putIfAbsent(day, () => {
+      final deliveryId = sold['deliveryProductsId'] as String?;
+      final orderedId = sold['orderedProductsId'] as String?;
+      if (deliveryId == null || orderedId == null) continue;
+
+      // ✅ JOIN delivery_products để lấy delivery_end_time
+      final deliveryDoc = await firestore.collection('delivery_products').doc(deliveryId).get();
+      if (!deliveryDoc.exists) continue;
+
+      final deliveryEndTime = (deliveryDoc['delivery_end_time'] as Timestamp?)?.toDate();
+      if (deliveryEndTime == null) continue;
+
+      // ✅ So sánh ngày
+      if (deliveryEndTime.isBefore(start) || deliveryEndTime.isAfter(end)) continue;
+
+      // ✅ JOIN OrderedProducts để lấy sản phẩm & số lượng
+      final orderedDoc = await firestore.collection('OrderedProducts').doc(orderedId).get();
+      if (!orderedDoc.exists) continue;
+
+      final ordered = orderedDoc.data() as Map<String, dynamic>;
+      final productId = ordered['productId'] as String?;
+      if (productId == null) continue;
+
+      final quantity = ordered['quantity'] as int? ?? 0;
+      final total = ordered['total'] as num? ?? 0;
+
+      // ✅ JOIN Products để lấy tên
+      final productDoc = await firestore.collection('Products').doc(productId).get();
+      final productName = productDoc.exists
+          ? (productDoc['name'] as String? ?? '')
+          : '';
+
+      result.add({
         'productId': productId,
         'productName': productName,
-        'day': day,
-        'quantity': 0,
-        'total': 0.0,
+        'day': deliveryEndTime.day,
+        'quantity': quantity,
+        'total': total,
       });
-
-      grouped[productId]![day]!['quantity'] += quantity;
-      grouped[productId]![day]!['total'] += total;
     }
 
-    final result = <Map<String, dynamic>>[];
-    for (var productEntry in grouped.entries) {
-      for (var dayEntry in productEntry.value.entries) {
-        result.add(dayEntry.value);
+    // ✅ Gom nhóm theo productId + day
+    final Map<String, Map<int, Map<String, dynamic>>> grouped = {};
+    for (var item in result) {
+      final pid = item['productId'];
+      final pname = item['productName'];
+      final day = item['day'] as int;
+      final qty = item['quantity'] as int;
+      final tot = item['total'] as num;
+
+      grouped.putIfAbsent(pid, () => {});
+      grouped[pid]!.putIfAbsent(day, () => {
+        'productId': pid,
+        'productName': pname,
+        'day': day,
+        'quantity': 0,
+        'total': 0,
+      });
+
+      grouped[pid]![day]!['quantity'] += qty;
+      grouped[pid]![day]!['total'] += tot;
+    }
+
+    final List<Map<String, dynamic>> finalData = [];
+    for (var p in grouped.entries) {
+      for (var d in p.value.entries) {
+        finalData.add(d.value);
       }
     }
 
-    return result;
+    return finalData;
   }
+
+
 
   /// ✅ Xuất file Excel ra thư mục Download
   static Future<void> exportToExcel(

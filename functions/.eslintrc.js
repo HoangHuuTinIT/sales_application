@@ -1,3 +1,4 @@
+/* eslint-env node */
 module.exports = {
   env: {
     es6: true,
@@ -14,14 +15,19 @@ module.exports = {
     "no-restricted-globals": ["error", "name", "length"],
     "prefer-arrow-callback": "error",
     "quotes": ["error", "double", {"allowTemplateLiterals": true}],
+    "no-undef": "off", // 👈 thêm dòng này
   },
+
   overrides: [
     {
       files: ["**/*.spec.*"],
       env: {
+         node: true,
         mocha: true,
       },
-      rules: {},
+      rules: {
+       'no-undef': 'off',
+      },
     },
   ],
   globals: {},

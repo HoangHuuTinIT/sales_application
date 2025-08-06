@@ -2,6 +2,7 @@ import 'package:ban_hang/screens/auth/forgot_password.dart';
 import 'package:ban_hang/screens/auth/signup.dart';
 import 'package:ban_hang/services/auth_services/auth_service.dart';
 import 'package:ban_hang/utils/message.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:form_field_validator/form_field_validator.dart';
@@ -31,21 +32,43 @@ class _SignInScreenState extends State<SignInScreen> {
     setState(() => isLoading = true);
     final email = emailController.text.trim();
     final password = passwordController.text.trim();
+
     try {
-      await FirebaseAuth.instance.signInWithEmailAndPassword(
-        email: email,
-        password: password,
-      );
-      if (!mounted) return;
-      // 👉 Nếu có redirectRoute thì ưu tiên push thẳng đến nó
-      if (widget.redirectRoute != null) {
-        Navigator.pushReplacementNamed(
-          context,
-          widget.redirectRoute!,
-          arguments: widget.arguments,
-        );
-      } else {
-        await AuthService().navigateUserByRole(context);
+      final userCredential = await FirebaseAuth.instance
+          .signInWithEmailAndPassword(email: email, password: password);
+      final uid = userCredential.user?.uid;
+
+      if (uid != null) {
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(uid)
+            .get();
+
+        final userData = userDoc.data();
+
+        if (userData != null && userData.containsKey('status')) {
+          final status = userData['status'];
+
+          if (status == 'chờ duyệt' || status == 'từ chối' || status == 'đã vô hiệu hóa') {
+            await FirebaseAuth.instance.signOut();
+            if (mounted) {
+              setState(() => isLoading = false);
+              message.showSnackbarfalse(context, "Tài khoản của bạn hiện không khả dụng.");
+            }
+            return;
+          }
+        }
+
+        if (!mounted) return;
+        if (widget.redirectRoute != null) {
+          Navigator.pushReplacementNamed(
+            context,
+            widget.redirectRoute!,
+            arguments: widget.arguments,
+          );
+        } else {
+          await AuthService().navigateUserByRole(context);
+        }
       }
     } on FirebaseAuthException catch (e) {
       if (!mounted) return;
@@ -68,7 +91,6 @@ class _SignInScreenState extends State<SignInScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     final themeColor = Colors.indigo;
@@ -78,7 +100,6 @@ class _SignInScreenState extends State<SignInScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            // Header gradient
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(vertical: 40),
@@ -94,9 +115,8 @@ class _SignInScreenState extends State<SignInScreen> {
                 ),
               ),
               child: Column(
-                children: [
-
-                  const Text(
+                children: const [
+                  Text(
                     'Chào mừng bạn!',
                     style: TextStyle(
                       fontSize: 22,
@@ -104,15 +124,13 @@ class _SignInScreenState extends State<SignInScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const Text(
+                  Text(
                     'Đến với Quân đoàn mua sắm',
                     style: TextStyle(color: Colors.white70),
                   ),
                 ],
               ),
             ),
-
-            // Form
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
@@ -122,7 +140,6 @@ class _SignInScreenState extends State<SignInScreen> {
                     children: [
                       Image.asset("assets/images/logo_quandoanmuasam.png", height: 100),
                       const SizedBox(height: 20),
-
                       TextFormField(
                         controller: emailController,
                         keyboardType: TextInputType.emailAddress,
@@ -189,7 +206,6 @@ class _SignInScreenState extends State<SignInScreen> {
                           if (error != null) {
                             message.showSnackbarfalse(context, error);
                           } else {
-                            // 👉 FIX QUAN TRỌNG: Nếu có redirectRoute thì push thẳng!
                             if (widget.redirectRoute != null) {
                               Navigator.pushReplacementNamed(
                                 context,
@@ -203,6 +219,38 @@ class _SignInScreenState extends State<SignInScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
+                      ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Color(0xFF1877F2), // Màu Facebook
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        icon: Image.asset(
+                          'assets/images/iconfb.png', // bạn cần thêm icon này vào assets
+                          height: 24,
+                        ),
+                        label: const Text('Đăng nhập bằng Facebook'),
+                        onPressed: () async {
+                          setState(() => isLoading = true);
+                          final error = await AuthService().signInWithFacebookAndCheckUserExists();
+                          setState(() => isLoading = false);
+                          if (!mounted) return;
+                          if (error != null) {
+                            message.showSnackbarfalse(context, error);
+                          } else {
+                            if (widget.redirectRoute != null) {
+                              Navigator.pushReplacementNamed(
+                                context,
+                                widget.redirectRoute!,
+                                arguments: widget.arguments,
+                              );
+                            } else {
+                              await AuthService().navigateUserByRole(context);
+                            }
+                          }
+                        },
+                      ),
+
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [

@@ -73,8 +73,6 @@ class _EnterPhoneCodeScreenState extends State<EnterPhoneCodeScreen> {
       } else {
         await FirebaseAuth.instance.signInWithCredential(credential);
       }
-
-
       if (mounted) Navigator.pop(context, widget.phoneNumber);
     } catch (e) {
       message.showSnackbarfalse(context, "Sai mã OTP hoặc lỗi: $e");

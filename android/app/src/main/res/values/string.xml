@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ban_hang</string>
+    <string name="facebook_app_id">1777558173152066</string>
+    <string name="facebook_client_token">1e49c4eb1d948bf88c960bdf2fd989a9</string>
+    <string name="fb_login_protocol_scheme">fb1777558173152066</string>
+</resources>

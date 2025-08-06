@@ -29,27 +29,29 @@ class OrderCancelledServices {
     for (var doc in snapshot.docs) {
       final data = doc.data()! as Map<String, dynamic>;
 
-      final userId = data['userId'];
-      final productId = data['productId'];
+      final orderedId = data['orderedProductsId'];
 
-      final userDoc =
-      await firestore.collection('users').doc(userId).get();
-      final userData = userDoc.exists
-          ? userDoc.data()! as Map<String, dynamic>
-          : {};
+      // 🎯 Lấy OrderedProducts gốc
+      final orderDoc = await firestore.collection('OrderedProducts').doc(orderedId).get();
+      if (!orderDoc.exists) continue;
 
-      final productDoc =
-      await firestore.collection('Products').doc(productId).get();
-      final productData = productDoc.exists
-          ? productDoc.data()! as Map<String, dynamic>
-          : {};
+      final orderData = orderDoc.data()!;
+      final userId = orderData['userId'];
+      final productId = orderData['productId'];
+
+      // 🎯 Lấy user
+      final userDoc = await firestore.collection('users').doc(userId).get();
+      final userData = userDoc.exists ? userDoc.data()! : {};
+
+      // 🎯 Lấy sản phẩm
+      final productDoc = await firestore.collection('Products').doc(productId).get();
+      final productData = productDoc.exists ? productDoc.data()! : {};
 
       results.add({
-        'orderId': doc.id,
+        'orderId': orderedId,
         'cancelledAt': data['cancelledAt'],
-        'quantity': data['quantity'],
-        'total': data['total'],
-        'userId': userId,
+        'quantity': orderData['quantity'],
+        'total': orderData['total'],
         'address': userData['address'] ?? '',
         'customerName': userData['name'] ?? '',
         'phone': userData['phone'] ?? '',
@@ -59,6 +61,7 @@ class OrderCancelledServices {
 
     return results;
   }
+
 
   /// Tạo file Excel và trả về đường dẫn file
   static Future<String> exportOrdersToExcel({
