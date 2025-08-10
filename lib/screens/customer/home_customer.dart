@@ -1,5 +1,4 @@
 import 'package:ban_hang/screens/customer/cartitems_screen.dart';
-import 'package:ban_hang/screens/customer/customer_order.dart';
 import 'package:ban_hang/screens/customer/my_customer.dart';
 import 'package:ban_hang/screens/customer/product_customer_chose.dart';
 import 'package:ban_hang/services/staff_services/product_service.dart';

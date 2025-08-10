@@ -246,7 +246,7 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
                                             } catch (e) {
                                               if (context.mounted) {
                                                 ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(content: Text('Lỗi: $e')),
+                                                  SnackBar(content: Text('In thất bại. Hãy kiểm tra cài đặt máy in')),
                                                 );
                                               }
                                             } finally {

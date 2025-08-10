@@ -93,7 +93,7 @@ class _SignInScreenState extends State<SignInScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final themeColor = Colors.indigo;
+    // final themeColor = Colors.indigo;
 
     return Scaffold(
       backgroundColor: const Color(0xFFE3F2FD),

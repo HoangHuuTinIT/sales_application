@@ -3,7 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
-import '../../services/owner_services/printer_service.dart';
+import '../../../services/owner_services/printer_service.dart';
 
 class SettingPrinterScreen extends StatefulWidget {
   final DocumentSnapshot? printerDoc;

@@ -157,7 +157,7 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
         padding: const EdgeInsets.all(12),
         child: Form(
           key: _formKey,
-          child: ListView(
+          child:ListView(
             children: [
               Row(
                 children: [
@@ -183,39 +183,76 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
                 ],
               ),
               const SizedBox(height: 20),
-              TextFormField(
+
+              // Mã người dùng (readonly)
+              TextField(
                 controller: _userIdController,
                 readOnly: true,
-                decoration: const InputDecoration(labelText: 'Mã người dùng'),
+                decoration: const InputDecoration(
+                  labelText: 'Mã người dùng',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
               ),
-              TextFormField(
+              const SizedBox(height: 12),
+
+              // Tên
+              TextField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Tên'),
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập tên' : null,
+                decoration: const InputDecoration(
+                  labelText: 'Tên',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
               ),
-              TextFormField(
+              const SizedBox(height: 12),
+
+              // Điện thoại
+              TextField(
                 controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Điện thoại'),
                 keyboardType: TextInputType.phone,
-                validator: (v) => (v == null || v.trim().isEmpty) ? 'Vui lòng nhập số điện thoại' : null,
+                decoration: const InputDecoration(
+                  labelText: 'Điện thoại',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
               ),
-              TextFormField(
+              const SizedBox(height: 12),
+
+              // Facebook
+              TextField(
                 controller: _facebookController,
-                decoration: const InputDecoration(labelText: 'Facebook'),
+                decoration: const InputDecoration(
+                  labelText: 'Facebook',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
               ),
-              TextFormField(
+              const SizedBox(height: 12),
+
+              // Email
+              TextField(
                 controller: _emailController,
-                decoration: const InputDecoration(labelText: 'Email'),
                 keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(
+                  labelText: 'Email',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
               ),
               const SizedBox(height: 16),
+
               Text('Địa chỉ', style: Theme.of(context).textTheme.titleMedium),
+
+              // Dropdown tỉnh
               DropdownButtonFormField<Province>(
                 value: selectedProvince,
-                items: provinces
-                    .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
-                    .toList(),
-                decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố'),
+                items: provinces.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
+                decoration: const InputDecoration(
+                  labelText: 'Tỉnh/Thành phố',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
                 onChanged: (p) {
                   setState(() {
                     selectedProvince = p;
@@ -225,15 +262,18 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
                     wards = [];
                   });
                 },
-                validator: (v) => v == null ? 'Vui lòng chọn tỉnh/thành phố' : null,
               ),
               const SizedBox(height: 12),
+
+              // Dropdown huyện
               DropdownButtonFormField<District>(
                 value: selectedDistrict,
-                items: districts
-                    .map((d) => DropdownMenuItem(value: d, child: Text(d.name)))
-                    .toList(),
-                decoration: const InputDecoration(labelText: 'Quận/Huyện'),
+                items: districts.map((d) => DropdownMenuItem(value: d, child: Text(d.name))).toList(),
+                decoration: const InputDecoration(
+                  labelText: 'Quận/Huyện',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
                 onChanged: (d) {
                   setState(() {
                     selectedDistrict = d;
@@ -243,39 +283,48 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
                         : [];
                   });
                 },
-                validator: (v) => v == null ? 'Vui lòng chọn quận/huyện' : null,
               ),
               const SizedBox(height: 12),
+
+              // Dropdown xã
               DropdownButtonFormField<Ward>(
                 value: selectedWard,
-                items: wards
-                    .map((w) => DropdownMenuItem(value: w, child: Text(w.name)))
-                    .toList(),
-                decoration: const InputDecoration(labelText: 'Xã/Phường'),
+                items: wards.map((w) => DropdownMenuItem(value: w, child: Text(w.name))).toList(),
+                decoration: const InputDecoration(
+                  labelText: 'Xã/Phường',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                ),
                 onChanged: (w) {
                   setState(() {
                     selectedWard = w;
                   });
                 },
-                validator: (v) => v == null ? 'Vui lòng chọn xã/phường' : null,
               ),
               const SizedBox(height: 12),
-              TextFormField(
+
+              // Địa chỉ chi tiết
+              TextField(
                 controller: _addressDetailController,
                 decoration: const InputDecoration(
                   labelText: 'Địa chỉ chi tiết',
                   hintText: 'Ví dụ: Số nhà, tên đường...',
+                  border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
-                validator: (v) =>
-                (v == null || v.trim().isEmpty) ? 'Vui lòng nhập địa chỉ chi tiết' : null,
               ),
               const SizedBox(height: 24),
+
               ElevatedButton(
                 onPressed: _save,
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                  textStyle: const TextStyle(fontSize: 16),
+                ),
                 child: const Text('Xác nhận'),
               ),
             ],
-          ),
+          )
         ),
       ),
     );

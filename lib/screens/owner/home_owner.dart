@@ -1,7 +1,10 @@
 // lib/screens/owner/home_owner.dart
+import 'package:ban_hang/screens/staff/categories_management.dart';
+import 'package:ban_hang/screens/staff/product_management.dart';
+import 'package:ban_hang/screens/staff/statistics_screen.dart';
 import 'package:flutter/material.dart';
-import 'approval_account.dart';
-import 'chose_customer_for_order.dart';  // import màn hình mới
+import 'account_management/approval_account.dart';
+import 'create_order/chose_customer_for_order.dart';  // import màn hình mới
 
 class HomeOwnerScreen extends StatelessWidget {
   const HomeOwnerScreen({super.key});
@@ -19,13 +22,27 @@ class HomeOwnerScreen extends StatelessWidget {
                   context,
                   icon: Icons.inventory,
                   title: 'Quản lý sản phẩm',
-                  onTap: () {},
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder:  (_)=> const ProductManagementScreen(),
+                    ),
+                    );
+                  },
+                ),
+                _buildSection(
+                  context,
+                  icon: Icons.category,
+                  title: 'Quản lý loại sản phẩm',
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(builder:  (_)=> const CategoriesManagementScreen(),
+                    ),
+                    );
+                  },
                 ),
                 _buildSection(
                   context,
                   icon: Icons.bar_chart,
                   title: 'Quản lý doanh thu',
-                  onTap: () {},
+                  onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_)=> const StatisticsScreen() ));},
                 ),
                 _buildSection(
                   context,

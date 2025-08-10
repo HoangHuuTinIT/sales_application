@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 
@@ -56,8 +57,11 @@ class ProductService {
     required double discount,
     required DateTime discountStartDate,
     required DateTime discountEndDate,
+    required double weight,  // 🆕
+    required String code,    // 🆕
   }) async {
     try {
+      final currentUser = FirebaseAuth.instance.currentUser;
       final docRef = await _firestore.collection('Products').add({
         'name': name,
         'description': description,
@@ -68,7 +72,10 @@ class ProductService {
         'discount': discount,
         'discountStartDate': discountStartDate,
         'discountEndDate': discountEndDate,
-        'sold': 0, // ✅ Thêm mặc định sold = 0
+        'sold': 0,
+        'weight': weight, // 🆕
+        'code': code,     // 🆕
+        'creatorId': currentUser?.uid, // 🆕
         'createdAt': FieldValue.serverTimestamp(),
       });
       await docRef.update({'productId': docRef.id});
@@ -87,9 +94,11 @@ class ProductService {
     required int stockQuantity,
     required String categoryId,
     List<String>? imageUrls,
-    required double discount, // ✅ MỚI
-    required DateTime discountStartDate, // ✅ MỚI
-    required DateTime discountEndDate,   // ✅ MỚI
+    required double discount,
+    required DateTime discountStartDate,
+    required DateTime discountEndDate,
+    required double weight, // 🆕
+    required String code,   // 🆕
   }) async {
     try {
       final docRef = _firestore.collection('Products').doc(productId);
@@ -99,9 +108,11 @@ class ProductService {
         'price': price,
         'stockQuantity': stockQuantity,
         'categoryId': categoryId,
-        'discount': discount, // ✅
+        'discount': discount,
         'discountStartDate': discountStartDate,
         'discountEndDate': discountEndDate,
+        'weight': weight, // 🆕
+        'code': code,     // 🆕
         'updatedAt': FieldValue.serverTimestamp(),
       };
       if (imageUrls != null && imageUrls.isNotEmpty) {

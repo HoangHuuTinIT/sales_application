@@ -33,6 +33,8 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
   final _discountController = TextEditingController();
   DateTime? _discountStartDate;
   DateTime? _discountEndDate;
+  final _weightController = TextEditingController();
+  final _codeController = TextEditingController();
 
   @override
   void initState() {
@@ -121,7 +123,10 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
       discount: hasDiscount ? double.parse(discountText) : 0.0,
       discountStartDate: hasDiscount ? _discountStartDate! : DateTime(1970),
       discountEndDate: hasDiscount ? _discountEndDate! : DateTime(1970),
+      weight: double.parse(_weightController.text.trim()),
+      code: _codeController.text.trim(),
     );
+
 
     setState(() {
       _isSaving = false;
@@ -186,9 +191,12 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
       categoryId: _selectedCategoryId!,
       imageUrls: imageUrls,
       discount: hasDiscount ? double.parse(discountText) : 0.0,
-      discountStartDate: hasDiscount ? _discountStartDate! : DateTime(1970), // placeholder nếu không có
+      discountStartDate: hasDiscount ? _discountStartDate! : DateTime(1970),
       discountEndDate: hasDiscount ? _discountEndDate! : DateTime(1970),
+      weight: double.parse(_weightController.text.trim()),
+      code: _codeController.text.trim(),
     );
+
 
     setState(() => _isSaving = false);
     if (error != null) {
@@ -381,6 +389,23 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                 ],
               ),
               const SizedBox(height: 8),
+              buildTextField(
+                controller: _codeController,
+                label: 'Mã sản phẩm',
+                validator: (value) => value!.isEmpty ? 'Không được để trống' : null,
+              ),
+              const SizedBox(height: 8),
+              buildTextField(
+                controller: _weightController,
+                label: 'Khối lượng (kg)',
+                keyboardType: TextInputType.number,
+                validator: (value) {
+                  if (value == null || value.isEmpty) return 'Không được để trống';
+                  if (double.tryParse(value) == null) return 'Phải là số';
+                  return null;
+                },
+              ),
+              const SizedBox(height: 8),
               ElevatedButton.icon(
                 onPressed: _pickImages,
                 icon: const Icon(Icons.image),
@@ -555,6 +580,9 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                               _discountEndDate = product['discountEndDate'] is DateTime
                                   ? product['discountEndDate']
                                   : null;
+                              _weightController.text = product['weight']?.toString() ?? '';
+                              _codeController.text = product['code'] ?? '';
+
                             });
                           }
                         },

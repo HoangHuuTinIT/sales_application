@@ -6,18 +6,18 @@ import 'package:ban_hang/screens/customer/buy_products.dart';
 import 'package:ban_hang/screens/customer/cartitems_screen.dart';
 import 'package:ban_hang/screens/customer/product_customer_chose.dart';
 import 'package:ban_hang/screens/customer/purchased_products.dart';
-import 'package:ban_hang/screens/owner/add_product_for_order.dart';
-import 'package:ban_hang/screens/owner/chose_facebook_page.dart';
-import 'package:ban_hang/screens/owner/chose_product_for_order.dart';
-import 'package:ban_hang/screens/owner/comment_on_facebook.dart';
-import 'package:ban_hang/screens/owner/create_management_account.dart';
-import 'package:ban_hang/screens/owner/edit_account.dart';
-import 'package:ban_hang/screens/owner/facebook_sales.dart';
-import 'package:ban_hang/screens/owner/list_livestreams.dart';
-import 'package:ban_hang/screens/owner/list_printer.dart';
+import 'package:ban_hang/screens/owner/account_management/create_management_account.dart';
+import 'package:ban_hang/screens/owner/account_management/edit_account.dart';
+import 'package:ban_hang/screens/owner/account_management/update_account.dart';
+import 'package:ban_hang/screens/owner/create_order/chose_product_for_order.dart';
 import 'package:ban_hang/screens/owner/owner_setting.dart';
-import 'package:ban_hang/screens/owner/setting_printer.dart';
-import 'package:ban_hang/screens/owner/update_account.dart';
+import 'package:ban_hang/screens/owner/printer_setting/list_printer.dart';
+import 'package:ban_hang/screens/owner/printer_setting/setting_printer.dart';
+import 'package:ban_hang/screens/owner/seller_facebook/chose_facebook_page.dart';
+import 'package:ban_hang/screens/owner/seller_facebook/comment_on_facebook.dart';
+import 'package:ban_hang/screens/owner/seller_facebook/facebook_sales.dart';
+import 'package:ban_hang/screens/owner/seller_facebook/list_livestreams.dart';
+import 'package:ban_hang/screens/staff/product_management.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
@@ -89,10 +89,9 @@ class MyApp extends StatelessWidget {
           );
         },
         '/chose_product_for_order': (_) => const ChoseProductForOrderScreen(),
-        '/add_product_for_order': (_) => const AddProductForOrderScreen(),
+        '/add_product_for_order': (_) => const ProductManagementScreen(),
         '/create-management-account': (_) => const CreateManagementAccountScreen(),
         '/facebook-sales': (_) => const FacebookSalesScreen(),
-        // '/chose-facebook-page': (_) => const ChoseFacebookPageScreen(),
         '/chose-facebook-page': (context) => const ChoseFacebookPageScreen(),
         '/list-livestreams': (_) => const ListLivestreamsScreen(),
         '/comment-on-facebook': (_) => const CommentOnFacebookScreen(),
