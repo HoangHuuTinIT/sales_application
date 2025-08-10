@@ -1,6 +1,8 @@
 // import thêm
 import 'dart:async';
 
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:ban_hang/services/owner_services/facebook_live_service.dart';
@@ -16,7 +18,7 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
   List<Map<String, dynamic>> comments = [];
   List<Map<String, dynamic>> filteredComments = [];
   bool isLoading = false;
-
+  final currentUser = FirebaseAuth.instance.currentUser;
   String? livestreamId;
   String? accessToken;
   String searchKeyword = '';
@@ -46,10 +48,11 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
     autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadComments());
   }
 
-  Future<void> _loadComments() async {
-    setState(() => isLoading = true);
+  Future<void> _loadComments({bool showLoading = true}) async {
+    if (showLoading) setState(() => isLoading = true);
+
     try {
-      final result = await FacebookLiveService().getComments(livestreamId!, accessToken!);
+      final result = await FacebookLiveService().loadComments(livestreamId!, accessToken!);
       setState(() {
         comments = result;
         _applyFilter();
@@ -57,9 +60,10 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
     } catch (e) {
       debugPrint('Error loading comments: $e');
     } finally {
-      setState(() => isLoading = false);
+      if (showLoading) setState(() => isLoading = false);
     }
   }
+
 
   void _applyFilter() {
     setState(() {
@@ -84,7 +88,6 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
       isLoading = false;
     });
   }
-
 
   String _formatVietnamTime(String utcTime) {
     try {
@@ -159,49 +162,125 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
                 final name = from?['name'] ?? '(Ẩn danh)';
                 final message = comment['message'] ?? '';
                 final time = _formatVietnamTime(comment['created_time'] ?? '');
-
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.only(right: 8),
-                        child: avatarUrl != null
-                            ? CircleAvatar(backgroundImage: NetworkImage(avatarUrl), radius: 22)
-                            : const CircleAvatar(child: Icon(Icons.person), radius: 22),
-                      ),
-                      Expanded(
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade100,
-                            border: Border.all(color: Colors.grey.shade300),
-                            borderRadius: BorderRadius.circular(10),
+                final status = comment['status'] ?? '';
+                bool isCreating = false;
+                return StatefulBuilder(
+                  builder: (context, setState) {
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(right: 8),
+                            child: avatarUrl != null
+                                ? CircleAvatar(backgroundImage: NetworkImage(avatarUrl), radius: 22)
+                                : const CircleAvatar(child: Icon(Icons.person), radius: 22),
                           ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          Expanded(
+                            child: Container(
+                              padding: const EdgeInsets.all(10),
+                              decoration: BoxDecoration(
+                                color: Colors.grey.shade100,
+                                border: Border.all(color: Colors.grey.shade300),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                                  Text(time, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                  Row(
+                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                    children: [
+                                      Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                                      Text(time, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  if (status == 'Bình thường')
+                                    Container(
+                                      margin: const EdgeInsets.only(top: 4),
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: Colors.green,
+                                        borderRadius: BorderRadius.circular(5),
+                                      ),
+                                      child: const Text(
+                                        'Bình thường',
+                                        style: TextStyle(fontSize: 12, color: Colors.white ,),
+
+                                      ),
+                                    ),
+                                  const SizedBox(height: 5),
+                                  Text(message, style: const TextStyle(fontSize: 14, color: Colors.black87)),
+                                  const SizedBox(height: 6),
+                                  Align(
+                                    alignment: Alignment.centerLeft,
+                                    child: SizedBox(
+                                      height: 28,
+                                      child: ElevatedButton(
+                                        onPressed: isCreating
+                                            ? null
+                                            : () async {
+                                          final userId = comment['from']?['id'];
+                                          final name = comment['from']?['name'];
+                                          final avatarUrl = comment['from']?['picture']?['data']?['url'];
+                                          if (userId != null && name != null) {
+                                            setState(() => isCreating = true);
+                                            final facebookService = FacebookLiveService();
+
+                                            try {
+                                              await facebookService.createOrderFromComment(
+                                                userId: userId,
+                                                name: name,
+                                                avatarUrl: avatarUrl,
+                                                time: _formatVietnamTime(comment['created_time'] ?? ''),
+                                                message: comment['message'] ?? '',
+                                              );
+
+                                              await _loadComments(showLoading: false);
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  const SnackBar(content: Text("Tạo đơn thành công")),
+                                                );
+                                              }
+                                            } catch (e) {
+                                              if (context.mounted) {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(content: Text('Lỗi: $e')),
+                                                );
+                                              }
+                                            } finally {
+                                              setState(() => isCreating = false);
+                                            }
+                                          }
+                                        },
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.green,
+                                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
+                                        ),
+                                        child: isCreating
+                                            ? const SizedBox(
+                                          width: 16,
+                                          height: 16,
+                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                                        )
+                                            : const Text("Tạo đơn", style: TextStyle(fontSize: 13)),
+                                      ),
+                                    ),
+                                  ),
                                 ],
                               ),
-                              const SizedBox(height: 5),
-                              Text(message, style: const TextStyle(fontSize: 14, color: Colors.black87)),
-                            ],
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
-                  ),
+                    );
+                  },
                 );
               },
             ),
-          )
-
+          ),
         ],
       ),
     );

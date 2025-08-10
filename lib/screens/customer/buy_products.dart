@@ -62,12 +62,12 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
           'status': 'Đang chờ xác nhận',
         };
 
-        final barcodeData = '${item['productId']}_${DateTime.now().millisecondsSinceEpoch}';
+        // final barcodeData = '${item['productId']}_${DateTime.now().millisecondsSinceEpoch}';
 
-        await BuyProductsService().createOrderWithBarcode(
-          barcodeData: barcodeData,
-          orderData: orderData,
-        );
+        // await BuyProductsService().createOrderWithBarcode(
+        //   barcodeData: barcodeData,
+        //   orderData: orderData,
+        // );
 
       }
       ScaffoldMessenger.of(context).showSnackBar(

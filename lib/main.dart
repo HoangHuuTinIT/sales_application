@@ -6,16 +6,23 @@ import 'package:ban_hang/screens/customer/buy_products.dart';
 import 'package:ban_hang/screens/customer/cartitems_screen.dart';
 import 'package:ban_hang/screens/customer/product_customer_chose.dart';
 import 'package:ban_hang/screens/customer/purchased_products.dart';
+import 'package:ban_hang/screens/owner/add_product_for_order.dart';
 import 'package:ban_hang/screens/owner/chose_facebook_page.dart';
+import 'package:ban_hang/screens/owner/chose_product_for_order.dart';
 import 'package:ban_hang/screens/owner/comment_on_facebook.dart';
 import 'package:ban_hang/screens/owner/create_management_account.dart';
 import 'package:ban_hang/screens/owner/edit_account.dart';
 import 'package:ban_hang/screens/owner/facebook_sales.dart';
 import 'package:ban_hang/screens/owner/list_livestreams.dart';
+import 'package:ban_hang/screens/owner/list_printer.dart';
+import 'package:ban_hang/screens/owner/owner_setting.dart';
+import 'package:ban_hang/screens/owner/setting_printer.dart';
 import 'package:ban_hang/screens/owner/update_account.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
+import 'package:vietnam_provinces/vietnam_provinces.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp(
@@ -26,7 +33,7 @@ void main() async {
 
   // ✅ 3. Áp dụng cài đặt Stripe
   await Stripe.instance.applySettings();
-
+  await VietnamProvinces.initialize();
   runApp(const MyApp());
 }
 
@@ -81,12 +88,23 @@ class MyApp extends StatelessWidget {
             onSave: args['onSave'],
           );
         },
+        '/chose_product_for_order': (_) => const ChoseProductForOrderScreen(),
+        '/add_product_for_order': (_) => const AddProductForOrderScreen(),
         '/create-management-account': (_) => const CreateManagementAccountScreen(),
         '/facebook-sales': (_) => const FacebookSalesScreen(),
         // '/chose-facebook-page': (_) => const ChoseFacebookPageScreen(),
         '/chose-facebook-page': (context) => const ChoseFacebookPageScreen(),
         '/list-livestreams': (_) => const ListLivestreamsScreen(),
         '/comment-on-facebook': (_) => const CommentOnFacebookScreen(),
+        '/owner-setting': (_) => const OwnerSettingScreen(),
+        '/list-printer': (_) => const ListPrinterScreen(),
+        '/setting-printer': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments;
+          if (args != null && args is DocumentSnapshot) {
+            return SettingPrinterScreen(printerDoc: args);
+          }
+          return const SettingPrinterScreen();
+        },
       },
       home: const HomeCustomer(),
     );

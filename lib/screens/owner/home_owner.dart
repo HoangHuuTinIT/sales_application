@@ -1,8 +1,7 @@
-// File: lib/screens/owner/home_owner.dart
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
+// lib/screens/owner/home_owner.dart
 import 'package:flutter/material.dart';
 import 'approval_account.dart';
+import 'chose_customer_for_order.dart';  // import màn hình mới
 
 class HomeOwnerScreen extends StatelessWidget {
   const HomeOwnerScreen({super.key});
@@ -36,7 +35,6 @@ class HomeOwnerScreen extends StatelessWidget {
                     Navigator.pushNamed(context, '/facebook-sales');
                   },
                 ),
-
                 _buildSection(
                   context,
                   icon: Icons.manage_accounts,
@@ -51,17 +49,17 @@ class HomeOwnerScreen extends StatelessWidget {
                           title: const Text('Xét duyệt tài khoản'),
                           onTap: () {
                             Navigator.pop(context);
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => const ApprovalAccountScreen()));
+                            Navigator.push(context,
+                                MaterialPageRoute(builder: (_) => const ApprovalAccountScreen()));
                           },
                         ),
                         ListTile(
                           leading: const Icon(Icons.edit),
                           title: const Text('Chỉnh sửa tài khoản'),
-                            onTap: () {
-                              Navigator.pop(context);
-                              Navigator.pushNamed(context, '/edit-accounts');
-                            }
-
+                          onTap: () {
+                            Navigator.pop(context);
+                            Navigator.pushNamed(context, '/edit-accounts');
+                          },
                         ),
                         ListTile(
                           leading: const Icon(Icons.person_add),
@@ -71,11 +69,33 @@ class HomeOwnerScreen extends StatelessWidget {
                             Navigator.pushNamed(context, '/create-management-account');
                           },
                         ),
-
                       ],
                     ),
                   ),
+                ),
 
+                // --- THÊM PHẦN NÀY ---
+                _buildSection(
+                  context,
+                  icon: Icons.receipt_long,
+                  title: 'Tạo hóa đơn bán hàng',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const ChoseCustomerForOrderScreen(),
+                      ),
+                    );
+                  },
+                ),
+
+                _buildSection(
+                  context,
+                  icon: Icons.settings,
+                  title: 'Cài đặt',
+                  onTap: () {
+                    Navigator.pushNamed(context, '/owner-setting');
+                  },
                 ),
               ],
             ),
@@ -97,5 +117,4 @@ class HomeOwnerScreen extends StatelessWidget {
       ),
     );
   }
-
 }

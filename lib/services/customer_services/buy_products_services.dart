@@ -83,56 +83,56 @@ class BuyProductsService {
 
     return docRef.id;
   }
-  Future<void> createOrderWithBarcode({
-    required String barcodeData,
-    required Map<String, dynamic> orderData,
-  }) async {
-    try {
-      // Tạo ảnh mã vạch PNG
-      final barcode = Barcode.code128();
-      final image = img.Image(width: 400, height: 100);
-      drawBarcode(
-        image,
-        barcode,
-        barcodeData,
-        x: 10,
-        y: 10,
-        width: 2,
-        height: 80,
-      );
-
-      // Nếu cần: thêm text dưới barcode (bỏ nếu không cần)
-      // img.drawString(image, img.arial_24, 10, 90, barcodeData);
-
-      final List<int> bytes = img.encodePng(image);
-      final typed.Uint8List pngBytes = typed.Uint8List.fromList(bytes);
-      // Upload lên Firebase Storage
-      final ref = FirebaseStorage.instance
-          .ref()
-          .child('barcodes/${DateTime.now().millisecondsSinceEpoch}.png');
-      await ref.putData(pngBytes);
-      final barcodeUrl = await ref.getDownloadURL();
-
-      // Lưu đơn hàng vào Firestore
-      final user = FirebaseAuth.instance.currentUser;
-      final orderWithBarcode = {
-        ...orderData,
-        'userId': user?.uid,
-        'barcodeData': barcodeData,
-        'barcodeImageUrl': barcodeUrl,
-        'createdAt': FieldValue.serverTimestamp(),
-      };
-
-      await FirebaseFirestore.instance
-          .collection('OrderedProducts')
-          .add(orderWithBarcode);
-
-      print('✅ Đơn hàng đã được lưu cùng mã vạch!');
-    } catch (e) {
-      print('❌ Lỗi khi tạo đơn hàng với mã vạch: $e');
-      rethrow;
-    }
-  }
+  // Future<void> createOrderWithBarcode({
+  //   required String barcodeData,
+  //   required Map<String, dynamic> orderData,
+  // }) async {
+  //   try {
+  //     // Tạo ảnh mã vạch PNG
+  //     final barcode = Barcode.code128();
+  //     final image = img.Image(width: 400, height: 100);
+  //     drawBarcode(
+  //       image,
+  //       barcode,
+  //       barcodeData,
+  //       x: 10,
+  //       y: 10,
+  //       width: 2,
+  //       height: 80,
+  //     );
+  //
+  //     // Nếu cần: thêm text dưới barcode (bỏ nếu không cần)
+  //     // img.drawString(image, img.arial_24, 10, 90, barcodeData);
+  //
+  //     final List<int> bytes = img.encodePng(image);
+  //     final typed.Uint8List pngBytes = typed.Uint8List.fromList(bytes);
+  //     // Upload lên Firebase Storage
+  //     final ref = FirebaseStorage.instance
+  //         .ref()
+  //         .child('barcodes/${DateTime.now().millisecondsSinceEpoch}.png');
+  //     await ref.putData(pngBytes);
+  //     final barcodeUrl = await ref.getDownloadURL();
+  //
+  //     // Lưu đơn hàng vào Firestore
+  //     final user = FirebaseAuth.instance.currentUser;
+  //     final orderWithBarcode = {
+  //       ...orderData,
+  //       'userId': user?.uid,
+  //       'barcodeData': barcodeData,
+  //       'barcodeImageUrl': barcodeUrl,
+  //       'createdAt': FieldValue.serverTimestamp(),
+  //     };
+  //
+  //     await FirebaseFirestore.instance
+  //         .collection('OrderedProducts')
+  //         .add(orderWithBarcode);
+  //
+  //     print('✅ Đơn hàng đã được lưu cùng mã vạch!');
+  //   } catch (e) {
+  //     print('❌ Lỗi khi tạo đơn hàng với mã vạch: $e');
+  //     rethrow;
+  //   }
+  // }
 
 }
 

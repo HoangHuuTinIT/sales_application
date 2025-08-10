@@ -73,29 +73,29 @@ exports.createPaymentIntent = onRequest(async (req, res) => {
     res.status(500).send({ error: err.message });
   }
 });
-exports.facebookWebhook = onRequest((req, res) => {
-  if (req.method === 'GET') {
-    // Dùng để xác minh webhook với Facebook
-    const VERIFY_TOKEN = 'webhook_comment_fb'; // 👉 bạn tự đặt
-    const mode = req.query['hub.mode'];
-    const token = req.query['hub.verify_token'];
-    const challenge = req.query['hub.challenge'];
-
-    if (mode && token === VERIFY_TOKEN) {
-      console.log('📥 Webhook verified!');
-      res.status(200).send(challenge);
-    } else {
-      res.sendStatus(403);
-    }
-  }
-
-  if (req.method === 'POST') {
-    const body = req.body;
-
-    console.log('📥 Nhận webhook từ Facebook:', JSON.stringify(body, null, 2));
-
-    // TODO: Xử lý comment ở đây (ví dụ: lưu vào Firestore hoặc gửi thông báo...)
-    res.status(200).send('EVENT_RECEIVED');
-  }
-});
+//exports.facebookWebhook = onRequest((req, res) => {
+//  if (req.method === 'GET') {
+//    // Dùng để xác minh webhook với Facebook
+//    const VERIFY_TOKEN = 'webhook_comment_fb'; // 👉 bạn tự đặt
+//    const mode = req.query['hub.mode'];
+//    const token = req.query['hub.verify_token'];
+//    const challenge = req.query['hub.challenge'];
+//
+//    if (mode && token === VERIFY_TOKEN) {
+//      console.log('📥 Webhook verified!');
+//      res.status(200).send(challenge);
+//    } else {
+//      res.sendStatus(403);
+//    }
+//  }
+//
+//  if (req.method === 'POST') {
+//    const body = req.body;
+//
+//    console.log('📥 Nhận webhook từ Facebook:', JSON.stringify(body, null, 2));
+//
+//    // TODO: Xử lý comment ở đây (ví dụ: lưu vào Firestore hoặc gửi thông báo...)
+//    res.status(200).send('EVENT_RECEIVED');
+//  }
+//});
 
