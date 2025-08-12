@@ -1,3 +1,4 @@
+import 'package:ban_hang/screens/auth/signup.dart';
 import 'package:ban_hang/services/customer_services/phone_verification_service.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -8,12 +9,13 @@ class EnterPhoneCodeScreen extends StatefulWidget {
   final String verificationId;
   final String phoneNumber;
   final bool isForChange;
+  final SignUpType? signUpType;
 
   const EnterPhoneCodeScreen({
     super.key,
     required this.verificationId,
     required this.phoneNumber,
-    this.isForChange = false,
+    this.isForChange = false, this.signUpType,
   });
 
   @override

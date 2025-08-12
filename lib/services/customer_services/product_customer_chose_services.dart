@@ -29,21 +29,29 @@ class ProductCustomerChoseService {
     }
   }
 
+  // Trong class ProductCustomerChoseService
+
   Future<void> submitRating({
     required String productId,
     required String userId,
     required int star,
+    required String userName, // <-- THÊM
+    required String userAvatar, // <-- THÊM
     String? comment,
     List<String>? imageUrls,
     List<String>? videoUrls,
   }) async {
+    final bool hasMediaValue = (imageUrls?.isNotEmpty ?? false) || (videoUrls?.isNotEmpty ?? false);
     await FirebaseFirestore.instance.collection('customer_rate').add({
       'productId': productId,
       'userId': userId,
+      'userName': userName, // <-- THÊM
+      'userAvatar': userAvatar, // <-- THÊM
       'star': star,
       'comment': comment ?? '',
       'imageUrls': imageUrls ?? [],
       'videoUrls': videoUrls ?? [],
+      'hasMedia': hasMediaValue, // <-- THÊM TRƯỜNG MỚI
       'createdAt': FieldValue.serverTimestamp(),
     });
   }
@@ -53,6 +61,7 @@ class ProductCustomerChoseService {
     int? star,
     bool? hasComment,
     bool? hasMedia,
+
   }) async {
     Query query = FirebaseFirestore.instance
         .collection('customer_rate')
@@ -61,38 +70,28 @@ class ProductCustomerChoseService {
     if (star != null) query = query.where('star', isEqualTo: star);
     if (hasComment == true) query = query.where('comment', isNotEqualTo: '');
     if (hasMedia == true) {
-      query = query.where('imageUrls', isNotEqualTo: []);
+      // Truy vấn trên trường mới, rất nhanh và hiệu quả!
+      query = query.where('hasMedia', isEqualTo: true);
     }
-
     final snapshot = await query.orderBy('createdAt', descending: true).get();
-    final users = FirebaseFirestore.instance.collection('users');
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
 
-    return Future.wait<Map<String, dynamic>>(
-      snapshot.docs.map((doc) async {
-        final rawData = doc.data();
-        if (rawData == null) return {};
+    // Không cần truy vấn thêm vào collection 'users' nữa
+    return snapshot.docs.map((doc) {
+      final data = doc.data() as Map<String, dynamic>;
+      final likedBy = List<String>.from(data['likedBy'] ?? []);
 
-        final data = rawData as Map<String, dynamic>;
-        final likedBy = List<String>.from(data['likedBy'] ?? []);
-        final userId = data['userId'];
-
-        final userDoc = await users.doc(userId).get();
-        final userData = userDoc.data() as Map<String, dynamic>?;
-
-        final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-
-        return {
-          'id': doc.id,
-          ...data,
-          'userName': userData?['name'] ?? 'Ẩn danh',
-          'userAvatar': userData?['avatarUrl'] ?? '',
-          'like': data['like'] ?? 0,
-          'isLikedByMe': currentUserId != null && likedBy.contains(currentUserId),
-          'createdAt': (data['createdAt'] as Timestamp?)?.toDate().toString() ?? '',
-        };
-
-      }),
-    );
+      return {
+        'id': doc.id,
+        ...data,
+        // Dữ liệu đã có sẵn, chỉ cần lấy ra
+        'userName': data['userName'] ?? 'Ẩn danh',
+        'userAvatar': data['userAvatar'] ?? '',
+        'like': data['like'] ?? 0,
+        'isLikedByMe': currentUserId != null && likedBy.contains(currentUserId),
+        'createdAt': (data['createdAt'] as Timestamp?)?.toDate().toString() ?? '',
+      };
+    }).toList();
 
   }
 

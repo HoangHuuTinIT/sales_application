@@ -1,10 +1,10 @@
-// lib/screens/owner/home_owner.dart
+import 'package:ban_hang/screens/auth/signin.dart';
+import 'package:flutter/material.dart';
 import 'package:ban_hang/screens/staff/categories_management.dart';
 import 'package:ban_hang/screens/staff/product_management.dart';
 import 'package:ban_hang/screens/staff/statistics_screen.dart';
-import 'package:flutter/material.dart';
 import 'account_management/approval_account.dart';
-import 'create_order/chose_customer_for_order.dart';  // import màn hình mới
+import 'create_order/chose_customer_for_order.dart';
 
 class HomeOwnerScreen extends StatelessWidget {
   const HomeOwnerScreen({super.key});
@@ -12,7 +12,29 @@ class HomeOwnerScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Trang chủ chủ cửa hàng')),
+      appBar: AppBar(
+        title: const Text('Trang chủ chủ cửa hàng'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) {
+              if (value == 'logout') {
+                // Xử lý đăng xuất ở đây (nếu có Firebase Auth thì signOut trước)
+                Navigator.pushAndRemoveUntil(
+                  context,
+                  MaterialPageRoute(builder: (_) => const SignInScreen()),
+                      (route) => false,
+                );
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'logout',
+                child: Text('Đăng xuất'),
+              ),
+            ],
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Expanded(
@@ -23,9 +45,9 @@ class HomeOwnerScreen extends StatelessWidget {
                   icon: Icons.inventory,
                   title: 'Quản lý sản phẩm',
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder:  (_)=> const ProductManagementScreen(),
-                    ),
-                    );
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => const ProductManagementScreen(),
+                    ));
                   },
                 ),
                 _buildSection(
@@ -33,16 +55,20 @@ class HomeOwnerScreen extends StatelessWidget {
                   icon: Icons.category,
                   title: 'Quản lý loại sản phẩm',
                   onTap: () {
-                    Navigator.push(context, MaterialPageRoute(builder:  (_)=> const CategoriesManagementScreen(),
-                    ),
-                    );
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => const CategoriesManagementScreen(),
+                    ));
                   },
                 ),
                 _buildSection(
                   context,
                   icon: Icons.bar_chart,
                   title: 'Quản lý doanh thu',
-                  onTap: () { Navigator.push(context, MaterialPageRoute(builder: (_)=> const StatisticsScreen() ));},
+                  onTap: () {
+                    Navigator.push(context, MaterialPageRoute(
+                      builder: (_) => const StatisticsScreen(),
+                    ));
+                  },
                 ),
                 _buildSection(
                   context,
@@ -90,8 +116,6 @@ class HomeOwnerScreen extends StatelessWidget {
                     ),
                   ),
                 ),
-
-                // --- THÊM PHẦN NÀY ---
                 _buildSection(
                   context,
                   icon: Icons.receipt_long,
@@ -105,7 +129,6 @@ class HomeOwnerScreen extends StatelessWidget {
                     );
                   },
                 ),
-
                 _buildSection(
                   context,
                   icon: Icons.settings,

@@ -109,17 +109,18 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                         Expanded(
                           child: ElevatedButton.icon(
                             icon: const Icon(Icons.photo),
-                            label: const Text('Chọn 1 ảnh'),
+                            label: const Text('Chọn ảnh'),
                             onPressed: () async {
-                              final List<XFile> images = await _picker.pickMultiImage();
-                              if (images.isNotEmpty) {
+                              final XFile? image = await _picker.pickImage(source: ImageSource.gallery);
+                              if (image != null) {
                                 setStateDialog(() {
-                                  // chỉ giữ 1 ảnh đầu tiên, và xoá ảnh cũ
+                                  // Xoá ảnh cũ, chỉ giữ video
                                   _selectedMedia.removeWhere((file) =>
                                   !file.path.endsWith('.mp4') &&
                                       !file.path.endsWith('.mov') &&
                                       !file.path.endsWith('.avi'));
-                                  _selectedMedia.add(images.first);
+                                  // Thêm ảnh mới
+                                  _selectedMedia.add(image);
                                 });
                               }
                             },
@@ -132,30 +133,28 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                             label: const Text('Chọn 1 video (≤10s)'),
                             onPressed: () async {
                               final XFile? video = await _picker.pickVideo(source: ImageSource.gallery);
-                              if (video != null) {
-                                final controller = VideoPlayerController.file(File(video.path));
-                                await controller.initialize();
-                                final duration = controller.value.duration;
-                                controller.dispose();
-
-                                if (duration.inSeconds > 10) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('❌ Video phải ngắn hơn 10 giây')),
-                                  );
-                                  return;
-                                }
-
-                                setStateDialog(() {
-                                  // Xoá video cũ (nếu có)
-                                  _selectedMedia.removeWhere((file) =>
-                                  file.path.endsWith('.mp4') ||
-                                      file.path.endsWith('.mov') ||
-                                      file.path.endsWith('.avi'));
-                                  _selectedMedia.add(video);
-                                });
+                              if (video == null) return;
+                              final controller = VideoPlayerController.file(File(video.path));
+                              await controller.initialize();
+                              final duration = controller.value.duration;
+                              controller.dispose();
+                              if (duration.inSeconds > 10) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('❌ Video phải ngắn hơn hoặc bằng 10 giây')),
+                                );
+                                return ;
                               }
+                              setStateDialog(() {
+                                _selectedMedia.removeWhere((file) =>
+                                file.path.toLowerCase().endsWith('.mp4') ||
+                                    file.path.toLowerCase().endsWith('.mov') ||
+                                    file.path.toLowerCase().endsWith('.avi')
+                                );
+                                _selectedMedia.add(video);
+                              });
                             },
                           ),
+
                         ),
                       ],
                     ),
@@ -166,7 +165,6 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                       children: _selectedMedia.map((file) {
                         final bool isExpanded = _expandedMedia == file;
                         final bool isVideo = file.path.endsWith('.mp4') || file.path.endsWith('.mov') || file.path.endsWith('.avi');
-
                         return GestureDetector(
                           onTap: () {
                             setStateDialog(() {
@@ -204,11 +202,11 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                       return;
                     }
 
-                    // ✅ Check lại video nếu có, không cho đăng nếu >10s
+                    // Kiểm tra nếu có video dài hơn 10 giây
                     for (final file in _selectedMedia) {
-                      final ext = file.path.split('.').last.toLowerCase();
-                      final isVideo = ext == 'mp4' || ext == 'mov' || ext == 'avi';
-
+                      final isVideo = file.path.toLowerCase().endsWith('.mp4') ||
+                          file.path.toLowerCase().endsWith('.mov') ||
+                          file.path.toLowerCase().endsWith('.avi');
                       if (isVideo) {
                         final controller = VideoPlayerController.file(File(file.path));
                         await controller.initialize();
@@ -217,9 +215,9 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
 
                         if (duration.inSeconds > 10) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('❌ Video phải dưới 10 giây')),
+                            const SnackBar(content: Text('❌ Video phải ngắn hơn hoặc bằng 10 giây')),
                           );
-                          return;
+                          return; // Chặn gửi nếu video dài quá 10 giây
                         }
                       }
                     }
@@ -231,19 +229,29 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                       _isSubmitting = true;
                     });
 
+                    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+                    final userData = userDoc.data() as Map<String, dynamic>?;
+                    final userName = userData?['name'] ?? 'Ẩn danh';
+                    final userAvatar = userData?['avatarUrl'] ?? '';
+
                     Map<String, List<String>> mediaUrls = {'imageUrls': [], 'videoUrls': []};
                     if (_selectedMedia.isNotEmpty) {
                       mediaUrls = await ProductCustomerChoseService().uploadReviewMedia(_selectedMedia);
                     }
 
+                    // Gọi hàm submitRating đã được cập nhật
                     await ProductCustomerChoseService().submitRating(
                       productId: widget.productId,
                       userId: user.uid,
+                      userName: userName, // <-- Truyền tên người dùng
+                      userAvatar: userAvatar, // <-- Truyền avatar người dùng
                       star: _selectedStar,
                       comment: _comment,
                       imageUrls: mediaUrls['imageUrls'],
                       videoUrls: mediaUrls['videoUrls'],
                     );
+
+                    // --- KẾT THÚC THAY ĐỔI ---
 
                     setStateDialog(() {
                       _isSubmitting = false;
@@ -253,12 +261,13 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(content: Text('✅ Đã gửi đánh giá')),
                     );
-                    setState(() {});
+                    setState(() {}); // Giữ lại để rebuild UI sau khi đăng
                   },
                   child: _isSubmitting
                       ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                       : const Text('Đăng'),
-                ),
+                )
+
               ],
             );
           },
@@ -318,18 +327,30 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
     final DateTime? discountEndDate = product?['discountEndDate']?.toDate();
     final bool hasDiscount = discount > 0 && (discountEndDate == null || discountEndDate.isAfter(now));
     return Scaffold(
-      appBar: AppBar(
+      appBar:AppBar(
         title: const Text('Chi tiết sản phẩm'),
         actions: [
           IconButton(
             icon: const Icon(Icons.shopping_cart),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (context) => CartItemsScreen()));
+              message.checkSignInOrNot(
+                context: context,
+                onLoggedIn: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const CartItemsScreen(),
+                    ),
+                  );
+                },
+                redirectRoute: '/cart', // route để quay lại sau khi đăng nhập
+              );
             },
           ),
         ],
       ),
-      body: isLoading
+
+        body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : product == null
           ? const Center(child: Text('Không tìm thấy sản phẩm'))
@@ -429,25 +450,33 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                   const Text('Mô tả sản phẩm', style: TextStyle(fontWeight: FontWeight.bold)),
                   const SizedBox(height: 8),
                   Text(product!['description'] ?? 'Không có mô tả'),
-
                   // NÚT ĐÁNH GIÁ
                   Padding(
                     padding: const EdgeInsets.symmetric(vertical: 12),
                     child: SizedBox(
                       width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _showAddReviewDialog,
-                        icon: const Icon(Icons.rate_review),
-                        label: const Text('Viết đánh giá'),
-                        style: ElevatedButton.styleFrom(
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                      ),
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            message.checkSignInOrNot(
+                              context: context,
+                              onLoggedIn: _showAddReviewDialog,
+                              // route này để redirect sau khi đăng nhập
+                              redirectRoute: '/product_detail',
+                              arguments: {
+                                'productId': product!['productId'] ?? product!['id'],
+                              },
+                            );
+                          },
+                          icon: const Icon(Icons.rate_review),
+                          label: const Text('Viết đánh giá'),
+                          style: ElevatedButton.styleFrom(
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        )
+
                     ),
                   ),
-
-                  // FILTER
                   Padding(
                     padding: const EdgeInsets.all(8.0),
                     child: Row(
@@ -501,7 +530,6 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                           .where((r) => r['isLikedByMe'] == true)
                           .map((r) => r['id'] as String)
                           .toSet();
-
                       return Column(
                         children: reviews.map((review) {
                           return Card(
@@ -664,9 +692,12 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
       floatingActionButton: Row(
         mainAxisAlignment: MainAxisAlignment.end,
         children: [
-          FloatingActionButton.extended(
-            heroTag: 'payment_fab',
-            onPressed: () {
+      FloatingActionButton.extended(
+      heroTag: 'payment_fab',
+        onPressed: () {
+          message.checkSignInOrNot(
+            context: context,
+            onLoggedIn: () {
               final price = (product!['price'] as num).toDouble();
               final finalPrice = hasDiscount ? price * (1 - discount / 100) : price;
               int quantity = 1;
@@ -687,8 +718,10 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                               Image.network(product!['imageUrls'][0], height: 100),
                             const SizedBox(height: 10),
                             Text('Giá: ${message.formatCurrency(finalPrice)}'),
-                            Text('Tổng tiền: ${message.formatCurrency(totalPrice)}',
-                                style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
+                            Text(
+                              'Tổng tiền: ${message.formatCurrency(totalPrice)}',
+                              style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue),
+                            ),
                             const SizedBox(height: 10),
                             Row(
                               children: [
@@ -745,17 +778,16 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                                   builder: (_) => BuyProductsScreen(
                                     selectedItems: [
                                       {
-                                        'productId': product!['productId'] ?? product!['id'], // fallback nếu key khác
+                                        'productId': product!['productId'] ?? product!['id'],
                                         'productName': product!['name'],
                                         'productImage': (product!['imageUrls'] as List).isNotEmpty
                                             ? product!['imageUrls'][0]
                                             : null,
                                         'quantity': quantity,
-                                        'price': finalPrice, // ✅ THÊM dòng này
+                                        'price': finalPrice,
                                         'totalAmount': totalPrice,
                                       }
                                     ],
-
                                   ),
                                 ),
                               );
@@ -769,11 +801,17 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                 },
               );
             },
+            redirectRoute: '/product_detail',
+            arguments: {
+              'productId': product!['productId'] ?? product!['id'],
+            },
+          );
+        },
+        label: const Text('Mua ngay'),
+        icon: const Icon(Icons.payment),
+      ),
 
-            label: const Text('Mua ngay'),
-            icon: const Icon(Icons.payment),
-          ),
-          const SizedBox(width: 16),
+        const SizedBox(width: 16),
           FloatingActionButton(
             heroTag: 'cart_fab',
             onPressed: () {
@@ -911,8 +949,6 @@ class StarRating extends StatelessWidget {
     );
   }
 }
-
-
 class VideoPlayerWidget extends StatefulWidget {
   final String videoUrl;
 

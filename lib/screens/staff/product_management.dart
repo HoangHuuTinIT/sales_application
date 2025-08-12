@@ -259,10 +259,119 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
           key: _formKey,
           child: ListView(
             children: [
+              // Ô chọn ảnh vuông bo góc ở trên cùng bên trái
+              // Phần trên cùng: Ô chọn ảnh + ảnh đã chọn
+              SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: Row(
+                  children: [
+                    // Ô vuông chọn ảnh
+                    GestureDetector(
+                      onTap: _pickImages,
+                      child: Container(
+                        width: 120,
+                        height: 120,
+                        decoration: BoxDecoration(
+                          border: Border.all(color: Colors.grey),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.all(12),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: const [
+                                Icon(Icons.camera_alt, size: 28, color: Colors.grey),
+                                SizedBox(width: 4),
+                                Icon(Icons.add, size: 24, color: Colors.grey),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            const Text(
+                              'Thêm ảnh',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+
+                    // Hiển thị ảnh đã chọn hoặc ảnh có sẵn
+                    ..._existingImageUrls.map((url) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.network(
+                                url,
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _existingImageUrls.remove(url);
+                                  });
+                                },
+                                child: const Icon(Icons.cancel, color: Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+
+                    ..._pickedImages.map((file) {
+                      return Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: Stack(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(8),
+                              child: Image.file(
+                                file,
+                                width: 120,
+                                height: 120,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                            Positioned(
+                              right: 0,
+                              top: 0,
+                              child: GestureDetector(
+                                onTap: () {
+                                  setState(() {
+                                    _pickedImages.remove(file);
+                                  });
+                                },
+                                child: const Icon(Icons.cancel, color: Colors.red),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }).toList(),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+
+              // Các trường nhập liệu chuyển sang TextField (không có validator)
               buildTextField(
                 controller: _productNameController,
                 label: 'Tên sản phẩm',
-                validator: (value) => value!.isEmpty ? 'Không được để trống' : null,
               ),
               const SizedBox(height: 8),
               buildTextField(
@@ -274,22 +383,17 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                 controller: _priceController,
                 label: 'Giá',
                 keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) return 'Không được để trống';
-                  final cleaned = value.replaceAll('.', '').replaceAll(',', '');
-                  if (double.tryParse(cleaned) == null) return 'Giá không hợp lệ';
-                  return null;
-                },
               ),
               const SizedBox(height: 8),
               buildTextField(
                 controller: _stockQuantityController,
                 label: 'Số lượng tồn kho',
                 keyboardType: TextInputType.number,
-                validator: (value) => value!.isEmpty ? 'Không được để trống' : null,
               ),
               const SizedBox(height: 8),
-              if (_priceController.text.isNotEmpty && double.tryParse(_priceController.text) != null)
+
+              if (_priceController.text.isNotEmpty &&
+                  double.tryParse(_priceController.text) != null)
                 Padding(
                   padding: const EdgeInsets.only(top: 4, left: 8),
                   child: Text(
@@ -298,6 +402,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                   ),
                 ),
               const SizedBox(height: 8),
+
               DropdownButtonFormField<String>(
                 value: _selectedCategoryId,
                 items: _categoryOptions.map((category) {
@@ -311,16 +416,12 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                 validator: (value) => value == null ? 'Vui lòng chọn loại hàng' : null,
               ),
               const SizedBox(height: 8),
-              TextFormField(
+
+              // Trường giảm giá cũng chuyển thành TextField không validator
+              TextField(
                 controller: _discountController,
                 decoration: const InputDecoration(labelText: 'Giảm giá (%)'),
                 keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.trim().isEmpty) return null;
-                  final parsed = double.tryParse(value);
-                  if (parsed == null || parsed < 0 || parsed > 100) return 'Phải từ 0% đến 100%';
-                  return null;
-                },
                 onChanged: (value) {
                   final parsed = double.tryParse(value);
                   if (value.trim().isEmpty || parsed == null || parsed <= 0) {
@@ -333,8 +434,8 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                   }
                 },
               ),
-
               const SizedBox(height: 8),
+
               Row(
                 children: [
                   Expanded(
@@ -355,7 +456,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                           });
                         }
                       }
-                          : null, // 🛑 Vô hiệu hóa nếu không có giảm giá
+                          : null,
                       child: Text(_discountStartDate == null
                           ? 'Chọn ngày bắt đầu'
                           : 'Từ: ${DateFormat('dd/MM/yyyy').format(_discountStartDate!)}'),
@@ -380,7 +481,7 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                           });
                         }
                       }
-                          : null, // 🛑 Vô hiệu hóa nếu không có giảm giá
+                          : null,
                       child: Text(_discountEndDate == null
                           ? 'Chọn ngày kết thúc'
                           : 'Đến: ${DateFormat('dd/MM/yyyy').format(_discountEndDate!)}'),
@@ -389,78 +490,17 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                 ],
               ),
               const SizedBox(height: 8),
+
               buildTextField(
                 controller: _codeController,
                 label: 'Mã sản phẩm',
-                validator: (value) => value!.isEmpty ? 'Không được để trống' : null,
               ),
               const SizedBox(height: 8),
               buildTextField(
                 controller: _weightController,
                 label: 'Khối lượng (kg)',
                 keyboardType: TextInputType.number,
-                validator: (value) {
-                  if (value == null || value.isEmpty) return 'Không được để trống';
-                  if (double.tryParse(value) == null) return 'Phải là số';
-                  return null;
-                },
               ),
-              const SizedBox(height: 8),
-              ElevatedButton.icon(
-                onPressed: _pickImages,
-                icon: const Icon(Icons.image),
-                label: const Text('Chọn ảnh từ thiết bị'),
-              ),
-              if (_pickedImages.isNotEmpty || _existingImageUrls.isNotEmpty)
-                SizedBox(
-                  height: 100,
-                  child: ListView.separated(
-                    scrollDirection: Axis.horizontal,
-                    itemCount: _pickedImages.length + _existingImageUrls.length,
-                    separatorBuilder: (_, __) => const SizedBox(width: 8),
-                    itemBuilder: (context, index) {
-                      if (index < _existingImageUrls.length) {
-                        final url = _existingImageUrls[index];
-                        return Stack(
-                          children: [
-                            Image.network(url, width: 100, fit: BoxFit.cover),
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _existingImageUrls.removeAt(index);
-                                  });
-                                },
-                                child: const Icon(Icons.cancel, color: Colors.red),
-                              ),
-                            )
-                          ],
-                        );
-                      } else {
-                        final fileIndex = index - _existingImageUrls.length;
-                        return Stack(
-                          children: [
-                            Image.file(_pickedImages[fileIndex], width: 100, fit: BoxFit.cover),
-                            Positioned(
-                              right: 0,
-                              top: 0,
-                              child: GestureDetector(
-                                onTap: () {
-                                  setState(() {
-                                    _pickedImages.removeAt(fileIndex);
-                                  });
-                                },
-                                child: const Icon(Icons.cancel, color: Colors.red),
-                              ),
-                            )
-                          ],
-                        );
-                      }
-                    },
-                  ),
-                ),
               const SizedBox(height: 16),
               Row(
                 children: [
@@ -486,10 +526,12 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 24),
               const Divider(),
               const SizedBox(height: 8),
               const Text('📦 Danh sách sản phẩm', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+
               DropdownButton<String>(
                 value: _filterCategoryId ?? 'all',
                 hint: const Text('Chọn loại để lọc'),
@@ -511,7 +553,9 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                   });
                 },
               ),
+
               const SizedBox(height: 12),
+
               _isLoadingProducts
                   ? const Center(child: CircularProgressIndicator())
                   : _products.isEmpty
@@ -568,21 +612,11 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
                               )['id'];
                               _pickedImages = [];
                               _existingImageUrls = List<String>.from(product['imageUrls'] ?? []);
-
-                              // 🟢 Gán discount
                               _discountController.text = (product['discount'] ?? 0).toString();
-
-                              // 🟢 Gán ngày giảm giá
-                              _discountStartDate = product['discountStartDate'] is DateTime
-                                  ? product['discountStartDate']
-                                  : null;
-
-                              _discountEndDate = product['discountEndDate'] is DateTime
-                                  ? product['discountEndDate']
-                                  : null;
+                              _discountStartDate = product['discountStartDate'] is DateTime ? product['discountStartDate'] : null;
+                              _discountEndDate = product['discountEndDate'] is DateTime ? product['discountEndDate'] : null;
                               _weightController.text = product['weight']?.toString() ?? '';
                               _codeController.text = product['code'] ?? '';
-
                             });
                           }
                         },
@@ -620,17 +654,17 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
       ),
     );
   }
+
   Widget buildTextField({
     required TextEditingController controller,
     required String label,
-    String? Function(String?)? validator,
     TextInputType? keyboardType,
   }) {
-    return TextFormField(
+    return TextField(
       controller: controller,
       decoration: InputDecoration(labelText: label),
-      validator: validator,
       keyboardType: keyboardType,
     );
   }
+
 }

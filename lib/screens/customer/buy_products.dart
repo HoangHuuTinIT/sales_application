@@ -31,6 +31,7 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
   }
 
   Future<void> _loadUserInfo() async {
+    print("UID hiện tại: ${FirebaseAuth.instance.currentUser?.uid}"); // 👈 Thêm ở đây
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
     try {
@@ -61,14 +62,6 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
           'paymentMethod': paymentMethod,
           'status': 'Đang chờ xác nhận',
         };
-
-        // final barcodeData = '${item['productId']}_${DateTime.now().millisecondsSinceEpoch}';
-
-        // await BuyProductsService().createOrderWithBarcode(
-        //   barcodeData: barcodeData,
-        //   orderData: orderData,
-        // );
-
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Đặt hàng thành công!'), backgroundColor: Colors.green),

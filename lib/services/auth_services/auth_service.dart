@@ -79,14 +79,12 @@ class AuthService {
     required String province,
     required String gender,
     required String detailAddress,
+    required String googleUid,
   }) async {
     try {
-      final user = _auth.currentUser;
-      if (user == null) return "Không tìm thấy người dùng";
-
       final fullAddress = "$detailAddress - $ward - $district - $province";
 
-      await _firestore.collection('users').doc(user.uid).set({
+      await FirebaseFirestore.instance.collection('users').doc(googleUid).set({
         'name': name,
         'email': email,
         'phone': phone,
@@ -175,9 +173,16 @@ class AuthService {
 
       final gAuth = await gUser.authentication;
 
+      // Lấy thông tin ID Google
+      final idToken = gAuth.idToken;
+      if (idToken == null) {
+        message.showSnackbarfalse(context, "Không thể lấy ID Token Google");
+        return;
+      }
+
       final credential = GoogleAuthProvider.credential(
         accessToken: gAuth.accessToken,
-        idToken: gAuth.idToken,
+        idToken: idToken,
       );
 
       final userCredential =
@@ -191,13 +196,15 @@ class AuthService {
       }
 
       final email = user.email!;
+      final googleUid = gUser.id; // <-- UID Google thật sự (khác Firebase UID)
+
+      // Kiểm tra Firestore xem Google UID đã tồn tại chưa
       final existing = await FirebaseFirestore.instance
           .collection('users')
-          .where('email', isEqualTo: email)
-          .limit(1)
+          .doc(googleUid)
           .get();
 
-      if (existing.docs.isNotEmpty) {
+      if (existing.exists) {
         message.showConfirmDialog(
           context: context,
           title: "Tài khoản đã tồn tại",
@@ -216,13 +223,16 @@ class AuthService {
         return;
       }
 
+      // Chuyển qua màn hình nhập thêm thông tin
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              SignUpInformationScreen(
-                initialData: {'email': email},
-              ),
+          builder: (_) => SignUpInformationScreen(
+            initialData: {
+              'email': email,
+              'googleUid': googleUid, // truyền luôn Google UID
+            },
+          ),
         ),
       );
     } catch (e) {
@@ -230,6 +240,7 @@ class AuthService {
       message.showSnackbarfalse(context, 'Lỗi đăng ký Google: $e');
     }
   }
+
 
   Future<void> signUpWithFacebookAndCheck(BuildContext context) async {
     try {
@@ -372,5 +383,31 @@ class AuthService {
       return 'Lỗi đăng nhập Facebook: $e';
     }
   }
+  Future<String?> createOwnerAccount({
+    required String name,
+    required String email,
+    required String password,
+    required String address,
+    required String phone,
+  }) async {
+    try {
+      final userCredential = await FirebaseAuth.instance.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
 
+      await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'address': address,
+        'role': 'owner',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      return null;
+    } catch (e) {
+      return e.toString();
+    }
+  }
 }
