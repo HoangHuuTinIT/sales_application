@@ -75,7 +75,7 @@ class ProductService {
         'sold': 0,
         'weight': weight, // 🆕
         'code': code,     // 🆕
-        'creatorId': currentUser?.uid, // 🆕
+        'shopid': currentUser?.uid, // 🆕
         'createdAt': FieldValue.serverTimestamp(),
       });
       await docRef.update({'productId': docRef.id});
@@ -152,43 +152,57 @@ class ProductService {
 
 
 
-  Future<List<Map<String, dynamic>>> fetchProducts(
-        {String? categoryId}) async {
-      try {
-        Query query = _firestore.collection('Products').orderBy(
-            'createdAt', descending: true);
-        if (categoryId != null) {
-          query = query.where('categoryId', isEqualTo: categoryId);
-        }
-        final snapshot = await query.get();
-        final categoriesSnapshot = await _firestore.collection('Categories')
-            .get();
-        final categoryMap = {
-          for (var doc in categoriesSnapshot.docs) doc.id: doc['name']
-          // ✅ sửa ở đây
-        };
-        return snapshot.docs.map((doc) {
-          final data = doc.data() as Map<String, dynamic>;
-          return {
-            'productId': doc.id,
-            'name': data['name'],
-            'description': data['description'],
-            'price': data['price'],
-            'stockQuantity': data['stockQuantity'],
-            'imageUrls': data['imageUrls'],
-            'categoryName': categoryMap[data['categoryId']] ?? 'Không rõ',
-            'discount': data['discount'] ?? 0,
-            'discountStartDate': data['discountStartDate']?.toDate(), // ✅ Firestore Timestamp -> DateTime
-            'discountEndDate': data['discountEndDate']?.toDate(),
-          };
-        }).toList();
-      } catch (e) {
-        print('Lỗi khi lấy sản phẩm: $e');
-        return [];
-      }
-    }
+  Future<List<Map<String, dynamic>>> fetchProducts({
+    String? categoryId,
+  }) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) return [];
 
-    Future<String?> deleteProduct(String productId) async {
+      // Lấy shopid của user hiện tại
+      final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+      final shopId = userDoc.data()?['shopid'];
+      if (shopId == null) return [];
+
+      // Truy vấn sản phẩm của shop này
+      Query query = _firestore.collection('Products')
+          .where('shopid', isEqualTo: shopId);
+
+      if (categoryId != null && categoryId.isNotEmpty) {
+        query = query.where('categoryId', isEqualTo: categoryId);
+      }
+
+      query = query.orderBy('createdAt', descending: true);
+
+      final snapshot = await query.get();
+
+      return snapshot.docs.map((doc) {
+        final data = doc.data() as Map<String, dynamic>;
+        return {
+          'productId': doc.id,
+          'name': data['name'],
+          'description': data['description'],
+          'price': data['price'],
+          'stockQuantity': data['stockQuantity'],
+          'categoryId': data['categoryId'],
+          'categoryName': data['categoryName'] ?? '',
+          'imageUrls': List<String>.from(data['imageUrls'] ?? []),
+          'discount': data['discount'] ?? 0,
+          'discountStartDate': data['discountStartDate']?.toDate(),
+          'discountEndDate': data['discountEndDate']?.toDate(),
+          'weight': data['weight'],
+          'code': data['code'],
+        };
+      }).toList();
+    } catch (e) {
+      print('Lỗi khi lấy sản phẩm: $e');
+      return [];
+    }
+  }
+
+
+
+  Future<String?> deleteProduct(String productId) async {
       try {
         await _firestore.collection('Products').doc(productId).delete();
         return null;

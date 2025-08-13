@@ -20,18 +20,24 @@ class BuyProductsService {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) throw Exception('Người dùng chưa đăng nhập');
 
-    final userDoc = await FirebaseFirestore.instance.collection('users').doc(
-        user.uid).get();
+    // Lấy thông tin user
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final userData = userDoc.data();
     final name = userData?['name'] ?? '';
-
     final normalizedName = removeDiacritics(name).toLowerCase().trim();
 
-    final docRef = _ref.doc(); // Tạo docRef trước để lấy ID
+    // ✅ Lấy shopid từ bảng Products
+    final productDoc = await FirebaseFirestore.instance.collection('Products').doc(productId).get();
+    if (!productDoc.exists) throw Exception('Không tìm thấy sản phẩm');
+    final shopid = productDoc.data()?['shopid'];
+
+    // Tạo đơn hàng
+    final docRef = _ref.doc();
     await docRef.set({
-      'orderedProductsId': docRef.id, // ✅ Lưu ID này vào chính tài liệu
+      'orderedProductsId': docRef.id,
       'userId': user.uid,
       'productId': productId,
+      'shopid': shopid, // ✅ Thêm shopId vào đơn hàng
       'total': total,
       'quantity': quantity,
       'paymentMethod': paymentMethod,
@@ -67,7 +73,9 @@ class BuyProductsService {
     final userData = userDoc.data();
     final name = userData?['name'] ?? '';
     final normalizedName = removeDiacritics(name).toLowerCase().trim();
-
+    final productDoc = await FirebaseFirestore.instance.collection('Products').doc(productId).get();
+    if (!productDoc.exists) throw Exception('Không tìm thấy sản phẩm');
+    final shopid = productDoc.data()?['shopid'];
     final docRef = _ref.doc();
     await docRef.set({
       'orderedProductsId': docRef.id,
@@ -75,6 +83,7 @@ class BuyProductsService {
       'productId': productId,
       'total': total,
       'quantity': quantity,
+      'shopid': shopid,
       'paymentMethod': paymentMethod,
       'status': 'Đang chờ xác nhận',
       'createdAt': FieldValue.serverTimestamp(),
@@ -83,56 +92,124 @@ class BuyProductsService {
 
     return docRef.id;
   }
-  // Future<void> createOrderWithBarcode({
-  //   required String barcodeData,
-  //   required Map<String, dynamic> orderData,
-  // }) async {
-  //   try {
-  //     // Tạo ảnh mã vạch PNG
-  //     final barcode = Barcode.code128();
-  //     final image = img.Image(width: 400, height: 100);
-  //     drawBarcode(
-  //       image,
-  //       barcode,
-  //       barcodeData,
-  //       x: 10,
-  //       y: 10,
-  //       width: 2,
-  //       height: 80,
-  //     );
-  //
-  //     // Nếu cần: thêm text dưới barcode (bỏ nếu không cần)
-  //     // img.drawString(image, img.arial_24, 10, 90, barcodeData);
-  //
-  //     final List<int> bytes = img.encodePng(image);
-  //     final typed.Uint8List pngBytes = typed.Uint8List.fromList(bytes);
-  //     // Upload lên Firebase Storage
-  //     final ref = FirebaseStorage.instance
-  //         .ref()
-  //         .child('barcodes/${DateTime.now().millisecondsSinceEpoch}.png');
-  //     await ref.putData(pngBytes);
-  //     final barcodeUrl = await ref.getDownloadURL();
-  //
-  //     // Lưu đơn hàng vào Firestore
-  //     final user = FirebaseAuth.instance.currentUser;
-  //     final orderWithBarcode = {
-  //       ...orderData,
-  //       'userId': user?.uid,
-  //       'barcodeData': barcodeData,
-  //       'barcodeImageUrl': barcodeUrl,
-  //       'createdAt': FieldValue.serverTimestamp(),
-  //     };
-  //
-  //     await FirebaseFirestore.instance
-  //         .collection('OrderedProducts')
-  //         .add(orderWithBarcode);
-  //
-  //     print('✅ Đơn hàng đã được lưu cùng mã vạch!');
-  //   } catch (e) {
-  //     print('❌ Lỗi khi tạo đơn hàng với mã vạch: $e');
-  //     rethrow;
-  //   }
-  // }
+  String generateOrderCode() {
+    final now = DateTime.now();
+    final datePart = "${now.year}${now.month.toString().padLeft(2, '0')}${now.day.toString().padLeft(2, '0')}";
+    final timePart = "${now.hour.toString().padLeft(2, '0')}${now.minute.toString().padLeft(2, '0')}${now.second.toString().padLeft(2, '0')}";
+    final randomPart = (DateTime.now().microsecondsSinceEpoch % 10000)
+        .toRadixString(36)
+        .toUpperCase()
+        .padLeft(4, '0');
+    return "ODR-$datePart-$timePart-$randomPart";
+  }
+
+  Future<void> createOrders({
+    required List<Map<String, dynamic>> selectedItems,
+    required String paymentMethod,
+  }) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) throw Exception('Người dùng chưa đăng nhập');
+
+    // Lấy thông tin user
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    final userData = userDoc.data();
+    final name = (userData?['name'] ?? '').toString();
+    final normalizedName = removeDiacritics(name).toLowerCase().trim();
+
+    // Chuẩn hóa phương thức thanh toán
+    final String pm = paymentMethod == 'Thanh toán khi nhận hàng' ? 'COD' : 'Stripe';
+
+    // Làm giàu dữ liệu sản phẩm
+    final List<Map<String, dynamic>> enriched = [];
+    await Future.wait(selectedItems.map((item) async {
+      final String productId = item['productId'];
+      String? shopid = (item['shopid'] as String?);
+      String? productName = (item['productName'] as String?);
+      num? price = (item['price'] as num?);
+
+      if (shopid == null || productName == null || price == null) {
+        final pDoc = await FirebaseFirestore.instance
+            .collection('Products')
+            .doc(productId)
+            .get();
+        if (!pDoc.exists) throw Exception('Không tìm thấy sản phẩm với ID: $productId');
+        final p = pDoc.data()!;
+        shopid ??= (p['shopid'] as String?) ?? '';
+        productName ??= (p['productName'] as String?) ?? (p['name'] as String?) ?? '';
+        price ??= (p['price'] as num?) ?? 0;
+      }
+
+      enriched.add({
+        'productId': productId,
+        'shopid': shopid,
+        'productName': productName,
+        'price': (price as num).toDouble(),
+        'quantity': (item['quantity'] as num).toInt(),
+        'totalAmount': (item['totalAmount'] != null)
+            ? ((item['totalAmount'] as num).toDouble())
+            : (price.toDouble() * (item['quantity'] as num).toDouble()),
+      });
+    }));
+
+    // Nhóm theo shopid
+    final Map<String, List<Map<String, dynamic>>> itemsByShop = {};
+    for (final it in enriched) {
+      final sid = it['shopid'] as String;
+      itemsByShop.putIfAbsent(sid, () => []);
+      itemsByShop[sid]!.add(it);
+    }
+
+    // Tạo đơn hàng cho từng shop
+    final ordersCol = FirebaseFirestore.instance.collection('OrderedProducts');
+
+    for (final entry in itemsByShop.entries) {
+      final String shopid = entry.key;
+      final List<Map<String, dynamic>> items = entry.value;
+
+      final double totalAmount = items.fold<double>(
+        0.0,
+            (sum, i) => sum + ((i['totalAmount'] as num).toDouble()),
+      );
+
+      // Tạo docRef trước
+      final orderRef = ordersCol.doc();
+
+      final Map<String, dynamic> orderData = {
+        'orderedProductsId': orderRef.id,
+        'orderCode': generateOrderCode(), // <-- Thêm mã đơn hàng
+        'shopid': shopid,
+        'userId': user.uid,
+        'paymentMethod': pm,
+        'status': 'Đang chờ xác nhận',
+        'totalAmount': totalAmount,
+        'createdAt': FieldValue.serverTimestamp(),
+        'nameSearch': normalizedName,
+      };
+
+      final batch = FirebaseFirestore.instance.batch();
+      batch.set(orderRef, orderData);
+
+      // Thêm các OrderDetails
+      final orderDetailsCol = orderRef.collection('OrderDetails');
+      for (final i in items) {
+        final detailRef = orderDetailsCol.doc();
+        final num price = i['price'] as num;
+        final int qty = i['quantity'] as int;
+
+        batch.set(detailRef, {
+          'productId': i['productId'],
+          'productName': i['productName'],
+          'price': price.toDouble(),
+          'quantity': qty,
+          'total': (price.toDouble() * qty),
+        });
+      }
+
+      await batch.commit();
+    }
+  }
+
+
 
 }
 

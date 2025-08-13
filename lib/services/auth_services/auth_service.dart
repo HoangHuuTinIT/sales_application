@@ -395,8 +395,9 @@ class AuthService {
         email: email,
         password: password,
       );
-
+      final uid = userCredential.user!.uid;
       await FirebaseFirestore.instance.collection('users').doc(userCredential.user!.uid).set({
+        'shopid': uid,
         'name': name,
         'email': email,
         'phone': phone,
@@ -410,4 +411,34 @@ class AuthService {
       return e.toString();
     }
   }
+  Future<String?> CreateCustomerAccount({
+    required String email,
+    required String password,
+    required String name,
+    required String phone,
+    required String address,
+  }) async {
+    try {
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+      final uid = userCredential.user!.uid;
+
+      await _firestore.collection('users').doc(uid).set({
+        'shopid':uid,
+        'name': name,
+        'email': email,
+        'phone': phone,
+        'address': address,
+        'role': 'customer',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      return null;
+    } catch (e) {
+      return 'Lỗi khi đăng ký tài khoản: $e';
+    }
+  }
+
 }

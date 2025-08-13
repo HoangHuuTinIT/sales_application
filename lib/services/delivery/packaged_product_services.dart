@@ -15,7 +15,6 @@ class PackagedProductServices {
 
       for (final doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
-
         results.add({
           'id': doc.id,
           'orderedProductsId': doc.id,

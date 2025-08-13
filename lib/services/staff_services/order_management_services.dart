@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:diacritic/diacritic.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class OrderManagementService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -12,16 +13,19 @@ class OrderManagementService {
     String? nameQuery,
     DateTime? dateFilter,
     String? statusFilter,
-  }) {
-    Query query = _firestore.collection('OrderedProducts');
+  }) async* {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) throw Exception("Chưa đăng nhập");
 
-    if (nameQuery != null && nameQuery.isNotEmpty) {
-      final normalized = _normalizeText(nameQuery);
-      query = query
-          .orderBy('nameSearch') // BẮT BUỘC
-          .where('nameSearch', isGreaterThanOrEqualTo: normalized)
-          .where('nameSearch', isLessThanOrEqualTo: '$normalized\uf8ff');
-    }
+    // 🔹 Lấy shopid của user hiện tại
+    final userDoc = await _firestore.collection('users').doc(currentUser.uid).get();
+    final shopId = (userDoc.data()?['shopid'] ?? '').toString().trim();
+
+    if (shopId.isEmpty) throw Exception("Không tìm thấy shopid");
+
+    Query query = _firestore
+        .collection('OrderedProducts')
+        .where('shopid', isEqualTo: shopId); // chỉ lấy đơn của shop này
 
     if (dateFilter != null) {
       final start = DateTime(dateFilter.year, dateFilter.month, dateFilter.day);
@@ -35,12 +39,13 @@ class OrderManagementService {
       query = query.where('status', isEqualTo: statusFilter);
     }
 
-    if (nameQuery == null || nameQuery.isEmpty) {
-      query = query.orderBy('createdAt', descending: true);
-    }
+    // Sắp xếp mới nhất lên trước
+    query = query.orderBy('createdAt', descending: true);
 
-    return query.snapshots();
+    yield* query.snapshots();
   }
+
+
 
   Future<List<Map<String, dynamic>?>> getUserAndProduct(
       String userId,

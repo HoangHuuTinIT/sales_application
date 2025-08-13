@@ -1,4 +1,5 @@
 
+import 'package:ban_hang/screens/customer/edit_information_for_order.dart';
 import 'package:ban_hang/screens/customer/home_customer.dart';
 import 'package:ban_hang/services/customer_services/stripe_payment_service.dart';
 import 'package:flutter/material.dart';
@@ -53,19 +54,21 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
   Future<void> _submitOrders() async {
     setState(() => _isSubmitting = true);
     try {
-      for (final item in widget.selectedItems) {
-        final orderData = {
-          'productId': item['productId'],
-          'productName': item['productName'],
-          'total': ((item['totalAmount'] ?? 0) as num).toDouble(),
-          'quantity': item['quantity'] as int,
-          'paymentMethod': paymentMethod,
-          'status': 'Đang chờ xác nhận',
-        };
-      }
+      final buyProductsService = BuyProductsService();
+      await buyProductsService.createOrders(
+        selectedItems: widget.selectedItems,
+        paymentMethod: 'Thanh toán khi nhận hàng',
+      );
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('✅ Đặt hàng thành công!'), backgroundColor: Colors.green),
       );
+
+      Navigator.pushAndRemoveUntil(
+        context,
+        MaterialPageRoute(builder: (_) => HomeCustomer()),
+            (route) => false,
+      );
+
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('❌ Lỗi: $e'), backgroundColor: Colors.red),
@@ -74,6 +77,7 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
       setState(() => _isSubmitting = false);
     }
   }
+
 
   double get total => widget.selectedItems.fold<double>(
     0,
@@ -92,22 +96,17 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
           IconButton(
             icon: const Icon(Icons.edit),
             onPressed: () async {
-              setState(() => _isEditing = true);
-              final userInfo = await BuyProductsService().fetchUserInfo();
-              setState(() => _isEditing = false);
-              if (!mounted) return;
-              await Navigator.push(
+              Navigator.push(
                 context,
                 MaterialPageRoute(
-                  builder: (_) => SignUpInformationScreen(
-                    redirectToOrder: true,
-                    initialData: userInfo,
-                  ),
+                  builder: (_) => EditInformationForOrderScreen(),
                 ),
-              );
-              _loadUserInfo();
+              ).then((_) {
+                _loadUserInfo(); // load lại thông tin sau khi sửa
+              });
             },
           ),
+
         ],
       ),
       body: userData == null
@@ -232,19 +231,18 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
                             }
                             final success = await stripeService.processPayment(total);
                             if (success) {
-                              for (final item in widget.selectedItems) {
-                                await stripeService.addOrderToFirestore(
-                                  item: item,
-                                  paymentMethod: paymentMethod,
-                                );
-                              }
+                              // ✅ Lưu đơn hàng vào Firestore
+                              final buyProductsService = BuyProductsService();
+                              await buyProductsService.createOrders(
+                                selectedItems: widget.selectedItems,
+                                paymentMethod: 'Chuyển khoản ngân hàng',
+                              );
                               message.showSnackbartrue(context, 'Đơn hàng đã được ghi nhận và thanh toán thành công');
                               Navigator.pushAndRemoveUntil(
                                 context,
                                 MaterialPageRoute(builder: (_) => HomeCustomer()),
-                                    (route) => false, // Xóa toàn bộ stack trước đó
+                                    (route) => false,
                               );
-
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
                                 const SnackBar(
@@ -253,7 +251,8 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
                                 ),
                               );
                             }
-                          } else {
+                          }
+                          else {
                             await _submitOrders(); // COD
                           }
                         },

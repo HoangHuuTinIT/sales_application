@@ -1,10 +1,12 @@
 import 'package:ban_hang/screens/auth/signin.dart';
+import 'package:ban_hang/screens/staff/order_management.dart';
 import 'package:flutter/material.dart';
 import 'package:ban_hang/screens/staff/categories_management.dart';
 import 'package:ban_hang/screens/staff/product_management.dart';
 import 'package:ban_hang/screens/staff/statistics_screen.dart';
 import 'account_management/approval_account.dart';
 import 'create_order/chose_customer_for_order.dart';
+
 
 class HomeOwnerScreen extends StatelessWidget {
   const HomeOwnerScreen({super.key});
@@ -18,7 +20,6 @@ class HomeOwnerScreen extends StatelessWidget {
           PopupMenuButton<String>(
             onSelected: (value) {
               if (value == 'logout') {
-                // Xử lý đăng xuất ở đây (nếu có Firebase Auth thì signOut trước)
                 Navigator.pushAndRemoveUntil(
                   context,
                   MaterialPageRoute(builder: (_) => const SignInScreen()),
@@ -125,6 +126,20 @@ class HomeOwnerScreen extends StatelessWidget {
                       context,
                       MaterialPageRoute(
                         builder: (_) => const ChoseCustomerForOrderScreen(),
+                      ),
+                    );
+                  },
+                ),
+                // 🔹 Thêm mục mới "Đơn đặt hàng"
+                _buildSection(
+                  context,
+                  icon: Icons.shopping_cart,
+                  title: 'Đơn đặt hàng',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OrderManagementScreen(),
                       ),
                     );
                   },

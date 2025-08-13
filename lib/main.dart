@@ -17,6 +17,7 @@ import 'package:ban_hang/screens/owner/seller_facebook/chose_facebook_page.dart'
 import 'package:ban_hang/screens/owner/seller_facebook/comment_on_facebook.dart';
 import 'package:ban_hang/screens/owner/seller_facebook/facebook_sales.dart';
 import 'package:ban_hang/screens/owner/seller_facebook/list_livestreams.dart';
+import 'package:ban_hang/screens/staff/order_details.dart';
 import 'package:ban_hang/screens/staff/product_management.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
@@ -103,6 +104,13 @@ class MyApp extends StatelessWidget {
             return SettingPrinterScreen(printerDoc: args);
           }
           return const SettingPrinterScreen();
+        },
+        '/orderDetails': (context) {
+          final args = ModalRoute.of(context)!.settings.arguments as Map<String, dynamic>;
+          return OrderDetailsScreen(
+            orderId: args['orderId'],
+            orderData: args['orderData'],
+          );
         },
       },
       home: const HomeCustomer(),

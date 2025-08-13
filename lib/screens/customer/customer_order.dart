@@ -1,24 +1,25 @@
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:ban_hang/services/customer_services/customer_order_services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:intl/intl.dart';
 import 'package:ban_hang/utils/message.dart';
 
 class CustomerOrderScreen extends StatefulWidget {
   const CustomerOrderScreen({super.key});
 
   @override
-  State<CustomerOrderScreen> createState() => _CustomerProductsScreenState();
+  State<CustomerOrderScreen> createState() => _CustomerOrderScreenState();
 }
 
-class _CustomerProductsScreenState extends State<CustomerOrderScreen> {
-  final _service = CustomerOrderService();
+class _CustomerOrderScreenState extends State<CustomerOrderScreen> {
+  final CustomerOrderService _orderService = CustomerOrderService();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text('Đơn hàng của tôi')),
       body: StreamBuilder<QuerySnapshot>(
-        stream: _service.getMyOrders(),
+        stream: _orderService.getMyOrders(),
         builder: (context, snapshot) {
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Center(child: CircularProgressIndicator());
@@ -26,96 +27,64 @@ class _CustomerProductsScreenState extends State<CustomerOrderScreen> {
           if (!snapshot.hasData || snapshot.data!.docs.isEmpty) {
             return const Center(child: Text('Bạn chưa có đơn hàng nào.'));
           }
-          // 📌 LỌC đơn hàng (ĐÃ FIX)
-          final orders = snapshot.data!.docs.where((doc) {
-            final status = (doc['status'] ?? '').toString();
-            return status != 'Hoàn tất thanh toán' && status != 'Đơn hàng bị hủy';
-          }).toList();
 
+          final orders = snapshot.data!.docs;
 
-          if (orders.isEmpty) {
-            return const Center(child: Text('Bạn chưa có đơn hàng nào.'));
-          }
-
-          return ListView.separated(
+          return ListView.builder(
+            padding: const EdgeInsets.all(16),
             itemCount: orders.length,
-            separatorBuilder: (_, __) => const Divider(),
             itemBuilder: (context, index) {
               final doc = orders[index];
               final data = doc.data() as Map<String, dynamic>;
 
-              return FutureBuilder<Map<String, dynamic>?>(
-                future: _service.getProductById(data['productId']),
-                builder: (context, productSnapshot) {
-                  if (productSnapshot.connectionState == ConnectionState.waiting) {
-                    return const ListTile(
-                      title: Text('Đang tải sản phẩm...'),
-                    );
-                  }
-
-                  final productData = productSnapshot.data;
-
-                  if (productData == null) {
-                    return const ListTile(
-                      title: Text('Sản phẩm không tồn tại'),
-                    );
-                  }
-
-                  final productName = productData['name'] ?? 'Không tên';
-                  final imageUrls = productData['imageUrls'];
-                  final imageUrl = (imageUrls is List && imageUrls.isNotEmpty) ? imageUrls[0] : null;
-
-                  return ListTile(
-                    leading: imageUrl != null
-                        ? Image.network(imageUrl, width: 50, height: 50, fit: BoxFit.cover)
-                        : const Icon(Icons.image_not_supported),
-                    title: Text(productName),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Số lượng: ${data['quantity'] ?? ''}'),
-                        Text('Tổng tiền: ${message.formatCurrency(data['total'] ?? 0)}'),
-                        Text('Trạng thái: ${data['status'] ?? 'N/A'}'),
-                      ],
-                    ),
-                    trailing: IconButton(
-                      icon: const Icon(Icons.delete, color: Colors.red),
-                      onPressed: () async {
-                        final confirm = await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Xác nhận hủy đơn'),
-                            content: const Text('Bạn có muốn hủy đơn hàng này không?'),
-                            actions: [
-                              TextButton(
-                                child: const Text('Không'),
-                                onPressed: () => Navigator.pop(context, false),
-                              ),
-                              TextButton(
-                                child: const Text('Xác nhận'),
-                                onPressed: () => Navigator.pop(context, true),
-                              ),
-                            ],
-                          ),
+              final createdAt = (data['createdAt'] as Timestamp).toDate();
+              final orderCode = data['orderCode'] ?? '';
+              final paymentMethod = data['paymentMethod'] ?? '';
+              final status = data['status'] ?? '';
+              final totalAmount = data['totalAmount'] ?? 0;
+              return Card(
+                elevation: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                child: ListTile(
+                  title: Text(
+                    'Mã đơn: $orderCode',
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Ngày: ${DateFormat('dd/MM/yyyy HH:mm').format(createdAt)}'),
+                      Text('Phương thức: $paymentMethod'),
+                      Text('Trạng thái: $status'),
+                      Text('Tổng tiền: ${message.formatCurrency(totalAmount)}'),
+                    ],
+                  ),
+                  trailing: PopupMenuButton<String>(
+                    onSelected: (value) {
+                      if (value == 'details') {
+                        Navigator.pushNamed(
+                          context,
+                          '/orderDetails',
+                          arguments: {
+                            'orderId': doc.id,
+                            'orderData': data,
+                          },
                         );
-
-                        if (confirm == true) {
-                          await _service.cancelOrderAndSave(doc.id);
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Đã hủy đơn hàng')),
-                          );
-                        }
-                      },
-                    ),
-                  );
-                },
+                      }
+                    },
+                    itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'details',
+                        child: Text('Chi tiết đơn hàng'),
+                      ),
+                    ],
+                  ),
+                ),
               );
-
             },
           );
         },
       ),
-
     );
   }
 }

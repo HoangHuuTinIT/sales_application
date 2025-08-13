@@ -157,117 +157,54 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                     final doc = orders[index];
                     final data = doc.data() as Map<String, dynamic>;
 
-                    final userId = data['userId'] ?? '';
-                    final productId = data['productId'] ?? '';
-                    final status = (data['status'] ?? '').toString();
-                    final isDisabled = status == 'Hoàn tất thanh toán' ||
-                        status == 'Đang vận chuyển' ||
-                        status == 'Shipper nhận hàng' ||
-                        status == 'Đơn hàng bị hủy';
+                    final createdAt = (data['createdAt'] as Timestamp).toDate();
+                    final orderCode = data['orderCode'] ?? '';
+                    final paymentMethod = data['paymentMethod'] ?? '';
+                    final status = data['status'] ?? '';
+                    final totalAmount = data['totalAmount'] ?? 0;
 
-                    return FutureBuilder<List<Map<String, dynamic>?>>(
-                      future: _orderService.getUserAndProduct(userId, productId),
-                      builder: (context, snapshot) {
-                        if (!snapshot.hasData) {
-                          return const Center(
-                              child: CircularProgressIndicator());
-                        }
-                        final userData = snapshot.data![0];
-                        final productData = snapshot.data![1];
-                        return Card(
-                          elevation: 4,
-                          margin: const EdgeInsets.only(bottom: 16),
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Tên: ${userData?['name'] ?? ''}',
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                Text('Địa chỉ: ${userData?['address'] ?? ''}'),
-                                Text('SĐT: ${userData?['phone'] ?? ''}'),
-                                Text(
-                                    'Hình thức thanh toán: ${data['paymentMethod'] ?? ''}'),
-                                const SizedBox(height: 8),
-                                Text('Sản phẩm: ${productData?['name'] ?? ''}'),
-                                Text('Số lượng: ${data['quantity'] ?? ''}'),
-                                Text(
-                                    'Tổng tiền: ${message.formatCurrency(data['total'] ?? 0)}'),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    const Text(
-                                      'Trạng thái:',
-                                      style: TextStyle(
-                                          fontWeight: FontWeight.bold),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      status,
-                                      style: const TextStyle(
-                                        fontWeight: FontWeight.bold,
-                                        color: Colors.orange,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Row(
-                                  children: [
-                                    ElevatedButton(
-                                      onPressed: isDisabled
-                                          ? null
-                                          : () async {
-                                        await _orderService
-                                            .updateOrderStatus(
-                                          doc.id,
-                                          'Đang tiến hành đóng gói',
-                                        );
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                              content: Text(
-                                                  '✅ Đã xác nhận đơn hàng!')),
-                                        );
-                                      },
-                                      child: const Text('Xác nhận đơn hàng'),
-                                    ),
-                                    const SizedBox(width: 8),
-                                    ElevatedButton(
-                                      onPressed: isDisabled
-                                          ? null
-                                          : () async {
-                                        await _orderService
-                                            .updateOrderStatus(
-                                          doc.id,
-                                          'Đóng gói hoàn tất',
-                                        );
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
-                                          const SnackBar(
-                                              content: Text(
-                                                  '✅ Đã hoàn tất đóng gói!')),
-                                        );
-                                      },
-                                      child: const Text('Hoàn tất đóng gói'),
-                                    ),
-                                  ],
-                                ),
-                              ],
+                    return Card(
+                      elevation: 4,
+                      margin: const EdgeInsets.only(bottom: 16),
+                      child: ListTile(
+                        title: Text('Mã đơn: $orderCode', style: const TextStyle(fontWeight: FontWeight.bold)),
+                        subtitle: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('Ngày: ${DateFormat('dd/MM/yyyy HH:mm').format(createdAt)}'),
+                            Text('Phương thức: $paymentMethod'),
+                            Text('Trạng thái: $status'),
+                            Text('Tổng tiền: ${message.formatCurrency(totalAmount)}'),
+                          ],
+                        ),
+                        trailing: PopupMenuButton<String>(
+                          onSelected: (value) {
+                            if (value == 'details') {
+                              Navigator.pushNamed(
+                                context,
+                                '/orderDetails',
+                                arguments: {
+                                  'orderId': doc.id,
+                                  'orderData': data,
+                                },
+                              );
+                            }
+                          },
+                          itemBuilder: (context) => [
+                            const PopupMenuItem(
+                              value: 'details',
+                              child: Text('Chi tiết đơn hàng'),
                             ),
-                          ),
-                        );
-                      },
+                          ],
+                        ),
+                      ),
                     );
                   },
                 );
               },
             ),
-          ),
+          )
+
         ],
       ),
     );

@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:ban_hang/utils/message.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:ban_hang/services/staff_services/product_service.dart';
@@ -50,13 +52,16 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
   }
   void _fetchProducts() async {
     setState(() => _isLoadingProducts = true);
-    final service = ProductService();
-    final products = await service.fetchProducts(categoryId: _filterCategoryId);
+
+    final products = await ProductService()
+        .fetchProducts(categoryId: _filterCategoryId);
+
     setState(() {
       _products = products;
       _isLoadingProducts = false;
     });
   }
+
 
   Future<void> _fetchCategories() async {
     final service = CategoryService();

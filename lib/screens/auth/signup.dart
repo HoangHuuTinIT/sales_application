@@ -14,6 +14,15 @@ enum SignUpType { owner, customer }
 
 class _SignUpScreenState extends State<SignUpScreen> {
   SignUpType _selectedType = SignUpType.owner;
+  Province? _selectedProvinceCustomer;
+  District? _selectedDistrictCustomer;
+  Ward? _selectedWardCustomer;
+
+  final _formKeyCustomer = GlobalKey<FormState>();
+  final _nameControllerCustomer = TextEditingController();
+  final _emailControllerCustomer = TextEditingController();
+  final _passwordControllerCustomer = TextEditingController();
+  final _detailAddressControllerCustomer = TextEditingController();
 
   // Controller form bán hàng
   final _formKey = GlobalKey<FormState>();
@@ -26,13 +35,34 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Province? _selectedProvince;
   District? _selectedDistrict;
   Ward? _selectedWard;
-
+  List<Province> _provinces = [];
   @override
   void initState() {
     super.initState();
     AuthService().initLocations(); // Khởi tạo vietnam_provinces
+    _provinces = AuthService().getProvinces();
   }
 
+  void _onProvinceChangedCustomer(Province? p) {
+    setState(() {
+      _selectedProvinceCustomer = p;
+      _selectedDistrictCustomer = null;
+      _selectedWardCustomer = null;
+    });
+  }
+
+  void _onDistrictChangedCustomer(District? d) {
+    setState(() {
+      _selectedDistrictCustomer = d;
+      _selectedWardCustomer = null;
+    });
+  }
+
+  void _onWardChangedCustomer(Ward? w) {
+    setState(() {
+      _selectedWardCustomer = w;
+    });
+  }
   void _onProvinceChanged(Province? p) {
     setState(() {
       _selectedProvince = p;
@@ -52,6 +82,51 @@ class _SignUpScreenState extends State<SignUpScreen> {
     setState(() {
       _selectedWard = w;
     });
+  }
+
+  Future<void> _handleConfirmCustomer() async {
+    if (!_formKeyCustomer.currentState!.validate()) return;
+
+    if (_selectedProvinceCustomer == null ||
+        _selectedDistrictCustomer == null ||
+        _selectedWardCustomer == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Vui lòng chọn đầy đủ địa chỉ')));
+      return;
+    }
+
+    final name = _nameControllerCustomer.text.trim();
+    final email = _emailControllerCustomer.text.trim();
+    final password = _passwordControllerCustomer.text.trim();
+    final detailAddress = _detailAddressControllerCustomer.text.trim();
+
+    final verifiedPhone = await Navigator.push<String?>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const VerifyPhoneNumberScreen(),
+      ),
+    );
+
+    if (verifiedPhone == null) return;
+
+    final address =
+        '$detailAddress - ${_selectedWardCustomer!.name} - ${_selectedDistrictCustomer!.name} - ${_selectedProvinceCustomer!.name}';
+
+    final error = await AuthService().CreateCustomerAccount(
+      name: name,
+      email: email,
+      password: password,
+      phone: verifiedPhone,
+      address: address,
+    );
+    if (error == null) {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('Đăng ký thành công')));
+      await AuthService().navigateUserByRole(context);
+    } else {
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text('Lỗi: $error')));
+    }
   }
 
   Future<void> _handleConfirmOwner() async {
@@ -145,8 +220,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
                   : _buildCustomerSignUp(),
             ),
 
-            // Bỏ 2 nút ở đây
-            // Để 2 nút trong _buildCustomerSignUp()
           ],
         ),
       ),
@@ -154,29 +227,123 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   Widget _buildCustomerSignUp() {
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        // Nút đăng ký Google và Facebook chỉ hiện ở đây
-        ElevatedButton.icon(
-          onPressed: _handleGoogleSignUp,
-          icon: const Icon(Icons.account_circle),
-          label: const Text("Đăng ký bằng Google"),
-        ),
+    return SingleChildScrollView(
+      child: Form(
+        key: _formKeyCustomer,
+        child: Column(
+          children: [
+            // Tên
+            TextFormField(
+              controller: _nameControllerCustomer,
+              decoration: const InputDecoration(labelText: 'Tên'),
+              validator: (v) => v == null || v.isEmpty ? 'Vui lòng nhập tên' : null,
+            ),
 
-        const SizedBox(height: 12),
+            // Tỉnh/Thành phố
+            DropdownButtonFormField<Province>(
+              value: _selectedProvinceCustomer,
+              hint: const Text('Chọn Tỉnh/Thành phố'),
+              items: AuthService()
+                  .getProvinces()
+                  .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
+                  .toList(),
+              onChanged: _onProvinceChangedCustomer,
+              validator: (v) => v == null ? 'Vui lòng chọn tỉnh' : null,
+            ),
 
-        ElevatedButton.icon(
-          onPressed: _handleFacebookSignUp,
-          icon: const Icon(Icons.facebook, color: Colors.white),
-          label: const Text("Đăng ký bằng Facebook"),
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.blue[800],
-          ),
+            const SizedBox(height: 12),
+
+            // Huyện/Quận
+            DropdownButtonFormField<District>(
+              value: _selectedDistrictCustomer,
+              hint: const Text('Chọn Huyện/Quận'),
+              items: _selectedProvinceCustomer == null
+                  ? []
+                  : AuthService()
+                  .getDistricts(_selectedProvinceCustomer!.code)
+                  .map((d) => DropdownMenuItem(value: d, child: Text(d.name)))
+                  .toList(),
+              onChanged: _onDistrictChangedCustomer,
+              validator: (v) => v == null ? 'Vui lòng chọn huyện' : null,
+            ),
+
+            const SizedBox(height: 12),
+
+            // Xã/Phường
+            DropdownButtonFormField<Ward>(
+              value: _selectedWardCustomer,
+              hint: const Text('Chọn Xã/Phường'),
+              items: (_selectedProvinceCustomer == null || _selectedDistrictCustomer == null)
+                  ? []
+                  : AuthService()
+                  .getWards(_selectedProvinceCustomer!.code, _selectedDistrictCustomer!.code)
+                  .map((w) => DropdownMenuItem(value: w, child: Text(w.name)))
+                  .toList(),
+              onChanged: _onWardChangedCustomer,
+              validator: (v) => v == null ? 'Vui lòng chọn xã' : null,
+            ),
+
+            // Địa chỉ chi tiết
+            TextFormField(
+              controller: _detailAddressControllerCustomer,
+              decoration: const InputDecoration(labelText: 'Địa chỉ chi tiết'),
+              validator: (v) => v == null || v.isEmpty ? 'Vui lòng nhập địa chỉ chi tiết' : null,
+            ),
+
+            // Email
+            TextFormField(
+              controller: _emailControllerCustomer,
+              decoration: const InputDecoration(labelText: 'Email'),
+              keyboardType: TextInputType.emailAddress,
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Vui lòng nhập email';
+                if (!v.contains('@')) return 'Email không hợp lệ';
+                return null;
+              },
+            ),
+
+            // Mật khẩu
+            TextFormField(
+              controller: _passwordControllerCustomer,
+              decoration: const InputDecoration(labelText: 'Mật khẩu'),
+              obscureText: true,
+              validator: (v) =>
+              v == null || v.length < 6 ? 'Mật khẩu phải ít nhất 6 ký tự' : null,
+            ),
+
+            const SizedBox(height: 20),
+
+            ElevatedButton(
+              onPressed: _handleConfirmCustomer,
+              child: const Text('Xác nhận'),
+            ),
+
+            const SizedBox(height: 30),
+
+            // Nút đăng ký Google
+            ElevatedButton.icon(
+              onPressed: _handleGoogleSignUp,
+              icon: const Icon(Icons.account_circle),
+              label: const Text("Đăng ký bằng Google"),
+            ),
+
+            const SizedBox(height: 12),
+
+            // Nút đăng ký Facebook
+            ElevatedButton.icon(
+              onPressed: _handleFacebookSignUp,
+              icon: const Icon(Icons.facebook, color: Colors.white),
+              label: const Text("Đăng ký bằng Facebook"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue[800],
+              ),
+            ),
+          ],
         ),
-      ],
+      ),
     );
   }
+
 
 
   Widget _buildOwnerSignUp() {
@@ -216,15 +383,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
             DropdownButtonFormField<Province>(
               value: _selectedProvince,
               hint: const Text('Chọn Tỉnh/Thành phố'),
-              items: AuthService()
-                  .getProvinces()
-                  .map(
-                    (p) => DropdownMenuItem(value: p, child: Text(p.name)),
-              )
+              items: _provinces
+                  .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
                   .toList(),
               onChanged: _onProvinceChanged,
               validator: (v) => v == null ? 'Vui lòng chọn tỉnh' : null,
             ),
+
 
             // Huyện
             DropdownButtonFormField<District>(
@@ -266,7 +431,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
             ),
 
             const SizedBox(height: 20),
-
             ElevatedButton(
               onPressed: _handleConfirmOwner,
               child: const Text('Xác nhận'),

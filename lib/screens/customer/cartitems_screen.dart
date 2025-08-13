@@ -16,7 +16,7 @@ class _CartItemsScreenState extends State<CartItemsScreen> {
   Set<String> _selectedProductIds = {};
   bool _selectAll = false;
   bool _isEditMode = false;
-
+  bool _isLoading = true;
   @override
   void initState() {
     super.initState();
@@ -24,8 +24,12 @@ class _CartItemsScreenState extends State<CartItemsScreen> {
   }
 
   Future<void> _fetchCartItems() async {
+    setState(() => _isLoading = true);
     final items = await CartItemsService().fetchCartItemsWithProductInfo();
-    setState(() => _cartItems = items);
+    setState(() {
+      _cartItems = items;
+      _isLoading=false;
+    });
   }
 
   void _toggleSelectAll(bool? selected) {
@@ -107,7 +111,9 @@ class _CartItemsScreenState extends State<CartItemsScreen> {
           )
         ],
       ),
-      body: Column(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator()) // 👈 Loading khi vào giao diện
+          : Column(
         children: [
           Expanded(
             child: _cartItems.isEmpty
@@ -117,13 +123,11 @@ class _CartItemsScreenState extends State<CartItemsScreen> {
               itemBuilder: (context, index) {
                 final item = _cartItems[index];
                 final productId = item['productId'] as String;
-                final selected =
-                _selectedProductIds.contains(productId);
+                final selected = _selectedProductIds.contains(productId);
                 return ListTile(
                   leading: Checkbox(
                     value: selected,
-                    onChanged: (value) =>
-                        _toggleSelection(productId, value ?? false),
+                    onChanged: (value) => _toggleSelection(productId, value ?? false),
                   ),
                   title: Text(item['productName'] ?? ''),
                   subtitle: Text(
@@ -135,8 +139,7 @@ class _CartItemsScreenState extends State<CartItemsScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => ProductCustomerChoseScreen(
-                            productId: productId),
+                        builder: (_) => ProductCustomerChoseScreen(productId: productId),
                       ),
                     );
                   },
@@ -161,20 +164,18 @@ class _CartItemsScreenState extends State<CartItemsScreen> {
                       const Text('Tất cả'),
                       const Spacer(),
                       if (!_isEditMode)
-                        Text('Tổng cộng: ${message.formatCurrency(_calculateTotal())}',
-                            style: const TextStyle(
-                                fontSize: 16, fontWeight: FontWeight.bold)),
+                        Text(
+                          'Tổng cộng: ${message.formatCurrency(_calculateTotal())}',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
                     ],
                   ),
                   const SizedBox(height: 8),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed:
-                      _isEditMode ? _deleteSelectedItems : _buyNow,
-                      child: Text(_isEditMode
-                          ? 'Xóa sản phẩm đã chọn'
-                          : 'Mua ngay'),
+                      onPressed: _isEditMode ? _deleteSelectedItems : _buyNow,
+                      child: Text(_isEditMode ? 'Xóa sản phẩm đã chọn' : 'Mua ngay'),
                     ),
                   )
                 ],
