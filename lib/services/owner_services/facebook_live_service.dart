@@ -99,12 +99,10 @@ class FacebookLiveService {
     required String creatorId,
   }) async {
     final usersRef = FirebaseFirestore.instance.collection('users');
-
     final doc = await usersRef.doc(userId).get();
     if (doc.exists) {
       return; // Đã tồn tại -> không thêm nữa
     }
-
     await usersRef.doc(userId).set({
       'name': name,
       'avatarUrl': avatarUrl,
@@ -117,6 +115,70 @@ class FacebookLiveService {
       'phone': null,   // thêm trường phone null
     });
   }
+  Future<void> createCustomerRecordsIfNotExists({
+    required String fbid,
+    required String name,
+    required String? avatarUrl,
+    required String creatorId,
+  }) async {
+    final firestore = FirebaseFirestore.instance;
+
+    // Lấy shopid của user hiện tại từ bảng users
+    final currentUserDoc =
+    await firestore.collection('users').doc(creatorId).get();
+    final shopId = currentUserDoc.data()?['shopid'];
+    if (shopId == null) {
+      throw Exception('Không tìm thấy shopid của người dùng hiện tại');
+    }
+
+    // 1. Kiểm tra / tạo khách hàng trong facebook_customer
+    DocumentReference customerRef;
+    final fbCustomerQuery = await firestore
+        .collection('facebook_customer')
+        .where('fbid', isEqualTo: fbid)
+        .limit(1)
+        .get();
+
+    if (fbCustomerQuery.docs.isEmpty) {
+      // Chưa tồn tại → tạo mới
+      final newDocRef = firestore.collection('facebook_customer').doc();
+      await newDocRef.set({
+        'name': name,
+        'fbid': fbid,
+        'avatarUrl': avatarUrl,
+        'status': 'Bình thường',
+        'creatorId': creatorId,
+        'createdAt': Timestamp.now(),
+        'phone_verified': true,
+        'role': 'customer',
+        'address': null,
+        'phone': null,
+      });
+      customerRef = newDocRef;
+    } else {
+      // Đã tồn tại → lấy reference
+      customerRef = fbCustomerQuery.docs.first.reference;
+    }
+
+    // 2. Kiểm tra trong shop_facebook_customer theo shopid + customerRef
+    final shopFbCustomerQuery = await firestore
+        .collection('shop_facebook_customer')
+        .where('customerRef', isEqualTo: customerRef)
+        .where('shopid', isEqualTo: shopId)
+        .limit(1)
+        .get();
+
+    if (shopFbCustomerQuery.docs.isEmpty) {
+      // Chưa tồn tại → thêm mới
+      await firestore.collection('shop_facebook_customer').add({
+        'customerRef': customerRef,
+        'shopid': shopId,
+        'createdAt': Timestamp.now(),
+      });
+    }
+  }
+
+
   Future<List<Map<String, dynamic>>> loadComments(String livestreamId,
       String accessToken,) async {
     // Step 1: Get raw comments from Facebook
@@ -160,8 +222,8 @@ class FacebookLiveService {
     final currentUserId = FirebaseAuth.instance.currentUser?.uid;
     if (currentUserId == null) throw Exception('Chưa đăng nhập');
     // 1. Tạo user nếu chưa có
-    await createUserFromCommentIfNotExists(
-      userId: userId,
+    await createCustomerRecordsIfNotExists(
+      fbid: userId,
       name: name,
       avatarUrl: avatarUrl,
       creatorId: currentUserId,

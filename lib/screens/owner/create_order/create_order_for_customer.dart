@@ -9,9 +9,8 @@ import 'edit_customer_for_order.dart';
 import 'edit_address_for_order.dart';
 
 class CreateOrderForCustomerScreen extends StatefulWidget {
-  final QueryDocumentSnapshot<Map<String, dynamic>> customerDoc;
-  const CreateOrderForCustomerScreen({super.key, required this.customerDoc});
-
+  final Map<String, dynamic> customerData;
+  const CreateOrderForCustomerScreen({super.key, required this.customerData});
   @override
   State<CreateOrderForCustomerScreen> createState() =>
       _CreateOrderForCustomerScreenState();
@@ -38,9 +37,8 @@ class _CreateOrderForCustomerScreenState
   @override
   void initState() {
     super.initState();
-    customerData = widget.customerDoc.data();
+    customerData = widget.customerData; // Không cần .data() nữa
     _getSellerName();
-
   }
   Future<void> _getSellerName() async {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
@@ -52,13 +50,31 @@ class _CreateOrderForCustomerScreenState
     }
   }
 
+
   void _selectProduct() async {
-    final products =
-    await Navigator.pushNamed(context, '/chose_product_for_order');
+    final products = await Navigator.pushNamed(context, '/chose_product_for_order');
     if (products != null && products is List<Map<String, dynamic>>) {
+      List<Map<String, dynamic>> loadedProducts = [];
+      for (var p in products) {
+        final doc = await FirebaseFirestore.instance
+            .collection('Products')
+            .doc(p['id'])
+            .get();
+        if (doc.exists) {
+          final data = doc.data() as Map<String, dynamic>;
+          loadedProducts.add({
+            ...p,
+            'quantity': 1,
+            'imageUrls': data['imageUrls'],
+            'price': (data['price'] ?? 0).toDouble(),
+            'stockQuantity': data['stockQuantity'] ?? 0,
+            'weight': (data['weight'] ?? 0).toDouble(),
+          });
+        }
+      }
+
       setState(() {
-        selectedProducts =
-            products.map((p) => {...p, 'quantity': 1}).toList();
+        selectedProducts = loadedProducts;
         _calculateTotal();
       });
     }
@@ -78,16 +94,6 @@ class _CreateOrderForCustomerScreenState
     }
   }
 
-  void _onQuantityChanged(int newQuantity) {
-    if (newQuantity < 1) return;
-    setState(() => quantity = newQuantity);
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(seconds: 1), () {
-      setState(() {
-        totalPrice = (selectedProduct?['price'] ?? 0) * quantity;
-      });
-    });
-  }
 
   Color _statusColor(String status) {
     if (status == 'Bình thường') return Colors.green;
@@ -121,25 +127,19 @@ class _CreateOrderForCustomerScreenState
                   context,
                   MaterialPageRoute(
                     builder: (_) => EditCustomerForOrderScreen(
-                      customerId: widget.customerDoc.id,
+                      customerId: customerData['id'],
                       initialData: customerData,
                     ),
                   ),
-                ).then((updatedData) async {
-                  if (updatedData != null &&
-                      updatedData is Map<String, dynamic>) {
-                    final doc = await FirebaseFirestore.instance
-                        .collection('users')
-                        .doc(widget.customerDoc.id)
-                        .get();
-                    if (doc.exists) {
-                      setState(() {
-                        customerData = doc.data()!;
-                      });
-                    }
+                ).then((updatedData) {
+                  if (updatedData != null && updatedData is Map<String, dynamic>) {
+                    setState(() {
+                      customerData = {...customerData, ...updatedData};
+                    });
                   }
                 });
               }
+
             },
             itemBuilder: (context) => [
               const PopupMenuItem(
@@ -206,193 +206,172 @@ class _CreateOrderForCustomerScreenState
                 ],
               ),
             ),
-
             Container(height: 8, color: Colors.grey[200]),
-
             // --- Sản phẩm ---
-            Container(
-              width: double.infinity,
-              color: Colors.white70,
-              padding: const EdgeInsets.all(12),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  ElevatedButton(
-                    onPressed: _selectProduct,
-                    child: const Text('Chọn sản phẩm khác'),
-                  ),
-                  if (selectedProducts.isNotEmpty) ...[
-                    const SizedBox(height: 12),
-                    Column(
-                      children: selectedProducts.map((product) {
-                        return FutureBuilder<DocumentSnapshot>(
-                          future: FirebaseFirestore.instance
-                              .collection('Products')
-                              .doc(product['id'])
-                              .get(),
-                          builder: (context, snapshot) {
-                            Widget imageWidget;
-
-                            if (snapshot.connectionState == ConnectionState.waiting) {
-                              imageWidget = Container(
-                                width: 60,
-                                height: 60,
-                                color: Colors.grey[300],
-                                child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                              );
-                            } else if (snapshot.hasData && snapshot.data!.exists) {
-                              final data = snapshot.data!.data() as Map<String, dynamic>;
-                              final currentUserId = FirebaseAuth.instance.currentUser!.uid;
-
-                              if (data['creatorId'] == currentUserId &&
-                                  data['imageUrls'] != null &&
-                                  data['imageUrls'] is List &&
-                                  (data['imageUrls'] as List).isNotEmpty) {
-                                imageWidget = Image.network(
-                                  data['imageUrls'][0],
-                                  width: 60,
-                                  height: 60,
-                                  fit: BoxFit.cover,
-                                );
-                              } else {
-                                imageWidget = _buildFallbackAvatar(product['name']);
-                              }
-                            } else {
-                              imageWidget = _buildFallbackAvatar(product['name']);
-                            }
-
-                            return Container(
-                              margin: const EdgeInsets.symmetric(vertical: 6),
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(12),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.05),
-                                    blurRadius: 4,
-                                    offset: const Offset(0, 2),
-                                  ),
-                                ],
-                              ),
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  ClipRRect(
-                                    borderRadius: BorderRadius.circular(8),
-                                    child: imageWidget,
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(
-                                          product['name'] ?? 'Tên sản phẩm',
-                                          style: const TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.w600,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          'Giá: ${(product['price'] ?? 0).toStringAsFixed(0)} đ',
-                                          style: const TextStyle(
-                                            fontSize: 14,
-                                            color: Colors.redAccent,
-                                            fontWeight: FontWeight.w500,
-                                          ),
-                                        ),
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          'Tồn kho: ${product['stockQuantity'] ?? 0}',
-                                          style: TextStyle(
-                                            fontSize: 13,
-                                            color: Colors.grey[600],
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                  Row(
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.remove_circle_outline),
-                                        onPressed: () {
-                                          setState(() {
-                                            if (product['quantity'] > 1) product['quantity']--;
-                                            _calculateTotal();
-                                          });
-                                        },
-                                      ),
-                                      SizedBox(
-                                        width: 50,
-                                        height: 35,
-                                        child: TextField(
-                                          keyboardType: TextInputType.number,
-                                          textAlign: TextAlign.center,
-                                          controller: TextEditingController(
-                                            text: product['quantity'].toString(),
-                                          ),
-                                          onChanged: (value) {
-                                            final qty = int.tryParse(value) ?? 1;
-                                            setState(() {
-                                              product['quantity'] = qty < 1 ? 1 : qty;
-                                              _calculateTotal();
-                                            });
-                                          },
-                                          decoration: const InputDecoration(
-                                            contentPadding: EdgeInsets.symmetric(vertical: 8),
-                                            border: OutlineInputBorder(),
-                                          ),
-                                        ),
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.add_circle_outline),
-                                        onPressed: () {
-                                          setState(() {
-                                            product['quantity']++;
-                                            _calculateTotal();
-                                          });
-                                        },
-                                      ),
-                                    ],
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 8),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.end,
-                        children: [
-                          Text(
-                            'Tổng cộng: ${message.formatCurrency(totalPrice)}',
-                            style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            'Số lượng: $totalQuantity',
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                          Text(
-                            'Khối lượng: ${totalWeight.toStringAsFixed(2)} kg',
-                            style: const TextStyle(fontSize: 16),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ]
-                ],
+            Align(
+              alignment: Alignment.center,
+              child: ElevatedButton(
+                onPressed: _selectProduct,
+                child: const Text('Chọn sản phẩm khác'),
               ),
             ),
+            if (selectedProducts.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              Column(
+                children: selectedProducts.map((product) {
+                  Widget imageWidget;
+                  if (product['imageUrls'] != null &&
+                      product['imageUrls'] is List &&
+                      (product['imageUrls'] as List).isNotEmpty) {
+                    imageWidget = Image.network(
+                      product['imageUrls'][0],
+                      width: 60,
+                      height: 60,
+                      fit: BoxFit.cover,
+                    );
+                  } else {
+                    imageWidget = _buildFallbackAvatar(product['name']);
+                  }
 
+                  return Container(
+                    margin: const EdgeInsets.symmetric(vertical: 6),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(12),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 4,
+                          offset: const Offset(0, 2),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: imageWidget,
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(product['name'] ?? 'Tên sản phẩm',
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                  )),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Giá: ${(product['price'] ?? 0).toStringAsFixed(0)} đ',
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  color: Colors.redAccent,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Tồn kho: ${product['stockQuantity'] ?? 0}',
+                                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            IconButton(
+                              icon: const Icon(Icons.remove_circle_outline),
+                              onPressed: () {
+                                if (product['quantity'] > 1) {
+                                  setState(() {
+                                    product['quantity']--;
+                                    _calculateTotal();
+                                  });
+                                }
+                              },
+                            ),
+                            SizedBox(
+                              width: 50,
+                              height: 35,
+                              child: TextField(
+                                controller: TextEditingController(
+                                  text: product['quantity'].toString(),
+                                ),
+                                keyboardType: TextInputType.number,
+                                textAlign: TextAlign.center,
+                                onChanged: (value) {
+                                  final qty = int.tryParse(value) ?? 1;
+                                  final maxStock = product['stockQuantity'] ?? 0;
+
+                                  setState(() {
+                                    if (qty > maxStock) {
+                                      product['quantity'] = maxStock;
+                                      message.showSnackbarfalse(context, 'Không được vượt quá tồn kho ($maxStock)');
+                                    } else if (qty < 1) {
+                                      product['quantity'] = 1;
+                                    } else {
+                                      product['quantity'] = qty;
+                                    }
+                                    _calculateTotal();
+                                  });
+                                },
+
+                                decoration: const InputDecoration(
+                                  contentPadding: EdgeInsets.symmetric(vertical: 8),
+                                  border: OutlineInputBorder(),
+                                ),
+                              ),
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.add_circle_outline),
+                              onPressed: () {
+                                final maxStock = product['stockQuantity'] ?? 0;
+                                if (product['quantity'] < maxStock) {
+                                  setState(() {
+                                    product['quantity']++;
+                                    _calculateTotal();
+                                  });
+                                } else {
+                                  message.showSnackbarfalse(context, 'Không được vượt quá tồn kho ($maxStock)');
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Container(
+                  margin: const EdgeInsets.only(right: 10.0), // Thêm margin bên phải
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        'Tổng cộng: ${message.formatCurrency(totalPrice)}',
+                        style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      Text(
+                        'Số lượng: $totalQuantity',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      Text(
+                        'Khối lượng: ${totalWeight.toStringAsFixed(2)} kg',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            ],
             const SizedBox(height: 12),
 
             // --- Thông tin thanh toán ---

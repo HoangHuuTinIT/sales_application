@@ -1,4 +1,5 @@
 import 'package:ban_hang/services/auth_services/auth_service.dart';
+import 'package:ban_hang/services/owner_services/customer_order_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
@@ -129,21 +130,19 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
     final addressFull =
         '${_addressDetailController.text.trim()} - ${selectedWard!.name} - ${selectedDistrict!.name} - ${selectedProvince!.name}';
 
-    final dataToUpdate = {
+    final formData = {
       'name': _nameController.text.trim(),
       'phone': _phoneController.text.trim(),
       'facebook': _facebookController.text.trim(),
       'email': _emailController.text.trim(),
       'address': addressFull,
-      'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    await FirebaseFirestore.instance
-        .collection('users')
-        .doc(widget.customerId)
-        .set(dataToUpdate, SetOptions(merge: true));
+    await CustomerOrderServiceLive()
+        .updateFacebookCustomerByFbid(widget.initialData['fbid'], formData);
 
-    Navigator.pop(context, dataToUpdate);
+    Navigator.pop(context, formData);
+
   }
 
   @override

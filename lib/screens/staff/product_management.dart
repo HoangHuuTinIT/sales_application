@@ -159,13 +159,20 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
 
   void _submitProduct() async {
     if (!_formKey.currentState!.validate()) return;
+
     if (_pickedImages.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn ảnh')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Vui lòng chọn ảnh')),
+      );
       return;
     }
+
     // 👉 Kiểm tra logic giảm giá
     final discountText = _discountController.text.trim();
-    final hasDiscount = discountText.isNotEmpty && double.tryParse(discountText) != null && double.parse(discountText) > 0;
+    final hasDiscount = discountText.isNotEmpty &&
+        double.tryParse(discountText) != null &&
+        double.parse(discountText) > 0;
+
     if (hasDiscount) {
       if (_discountStartDate == null || _discountEndDate == null) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -180,49 +187,52 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
         return;
       }
     }
+
     setState(() => _isSaving = true);
-    final service = ProductService();
-    final imageUrls = await service.uploadMultipleImages(_pickedImages);
-    if (imageUrls.isEmpty) {
+    try {
+      final service = ProductService();
+
+      final imageUrls = await service.uploadMultipleImages(_pickedImages);
+      if (imageUrls.isEmpty) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Lỗi khi upload ảnh')),
+        );
+        return;
+      }
+
+      final error = await service.addProduct(
+        name: _productNameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        price: parsePriceInput(_priceController.text.trim()),
+        stockQuantity: int.parse(_stockQuantityController.text.trim()),
+        categoryId: _selectedCategoryId!,
+        imageUrls: imageUrls,
+        discount: hasDiscount ? double.parse(discountText) : 0.0,
+        discountStartDate: hasDiscount ? _discountStartDate! : DateTime(1970),
+        discountEndDate: hasDiscount ? _discountEndDate! : DateTime(1970),
+        weight: double.parse(_weightController.text.trim()),
+        code: _codeController.text.trim(),
+      );
+
+      if (error != null) {
+        setState(() => _isSaving = false);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
+        return;
+      }
+
+      // ✅ Thành công: đóng màn này và trả true cho màn trước để reload
+      if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Lỗi khi upload ảnh')));
-      return;
-    }
-    final error = await service.addProduct(
-      name: _productNameController.text.trim(),
-      description: _descriptionController.text.trim(),
-      price: parsePriceInput(_priceController.text.trim()),
-      stockQuantity: int.parse(_stockQuantityController.text.trim()),
-      categoryId: _selectedCategoryId!,
-      imageUrls: imageUrls,
-      discount: hasDiscount ? double.parse(discountText) : 0.0,
-      discountStartDate: hasDiscount ? _discountStartDate! : DateTime(1970),
-      discountEndDate: hasDiscount ? _discountEndDate! : DateTime(1970),
-      weight: double.parse(_weightController.text.trim()),
-      code: _codeController.text.trim(),
-    );
-
-
-    setState(() => _isSaving = false);
-    if (error != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error)));
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Thêm sản phẩm thành công')));
-      _formKey.currentState!.reset();
-      _productNameController.clear();
-      _descriptionController.clear();
-      _priceController.clear();
-      _stockQuantityController.clear();
-      _discountController.clear();
-      _discountStartDate = null;
-      _discountEndDate = null;
-      setState(() {
-        _pickedImages = [];
-        _selectedCategoryId = null;
-        _fetchProducts();
-      });
+      Navigator.pop(context, true); // <— cứng pop(true)
+    } catch (e) {
+      setState(() => _isSaving = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Có lỗi xảy ra: $e')),
+      );
     }
   }
+
 
   void _deleteSelectedProducts() async {
     final confirm = await showDialog<bool>(

@@ -227,7 +227,6 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
                                           if (userId != null && name != null) {
                                             setState(() => isCreating = true);
                                             final facebookService = FacebookLiveService();
-
                                             try {
                                               await facebookService.createOrderFromComment(
                                                 userId: userId,

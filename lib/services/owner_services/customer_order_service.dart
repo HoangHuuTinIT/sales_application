@@ -22,6 +22,41 @@ class CustomerOrderServiceLive {
       throw Exception('Lỗi khi lấy danh sách khách hàng: $e');
     }
   }
+  Future<List<Map<String, dynamic>>> fetchCustomersByShopIdFromRef() async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) throw Exception("Chưa đăng nhập");
+
+      // 1. Lấy shopId của user hiện tại
+      final userSnap = await _firestore.collection('users').doc(currentUser.uid).get();
+      if (!userSnap.exists) throw Exception("Không tìm thấy user");
+      final shopId = userSnap.data()?['shopid'];
+      if (shopId == null) throw Exception("User không có shopId");
+
+      // 2. Lấy danh sách shop_facebook_customer theo shopId
+      final shopCustomerSnap = await _firestore
+          .collection('shop_facebook_customer')
+          .where('shopid', isEqualTo: shopId)
+          .get();
+
+      // 3. Từ mỗi customerRef, lấy dữ liệu facebook_customer
+      List<Map<String, dynamic>> customers = [];
+      for (var doc in shopCustomerSnap.docs) {
+        final ref = doc.data()['customerRef'];
+        if (ref is DocumentReference) {
+          final customerSnap = await ref.get();
+          if (customerSnap.exists) {
+            final data = customerSnap.data() as Map<String, dynamic>;
+            data['id'] = customerSnap.id;
+            customers.add(data);
+          }
+        }
+      }
+      return customers;
+    } catch (e) {
+      throw Exception("Lỗi khi lấy danh sách khách hàng từ ref: $e");
+    }
+  }
 
   /// Cập nhật hoặc tạo mới thông tin khách hàng trong bảng users
   Future<void> updateCustomerInfo(String userId, Map<String, dynamic> updatedData) async {
@@ -172,4 +207,73 @@ class CustomerOrderServiceLive {
       return data;
     }).toList();
   }
+  Future<void> updateFacebookCustomerByFbid(String fbid, Map<String, dynamic> formData) async {
+    try {
+      if (fbid.isEmpty) throw Exception("Thiếu fbid");
+
+      // 1. Lấy document theo fbid
+      final querySnapshot = await _firestore
+          .collection('facebook_customer')
+          .where('fbid', isEqualTo: fbid)
+          .limit(1)
+          .get();
+
+      if (querySnapshot.docs.isEmpty) {
+        throw Exception("Không tìm thấy khách hàng với fbid này");
+      }
+
+      final docRef = querySnapshot.docs.first.reference;
+      final currentData = querySnapshot.docs.first.data();
+
+      // 2. So sánh và chỉ update các trường thay đổi
+      final Map<String, dynamic> updatedData = {};
+
+      void checkAndUpdate(String key, dynamic newValue) {
+        if (newValue != null && newValue.toString().trim().isNotEmpty && newValue != currentData[key]) {
+          updatedData[key] = newValue;
+        }
+      }
+
+      checkAndUpdate('name', formData['name']);
+      checkAndUpdate('phone', formData['phone']);
+      checkAndUpdate('facebook', formData['facebook']);
+      checkAndUpdate('email', formData['email']);
+      checkAndUpdate('address', formData['address']);
+
+      // Thêm updatedAt để biết lúc nào sửa
+      updatedData['updatedAt'] = FieldValue.serverTimestamp();
+
+      // 3. Cập nhật (merge giữ nguyên các trường khác)
+      await docRef.set(updatedData, SetOptions(merge: true));
+    } catch (e) {
+      throw Exception("Lỗi khi cập nhật facebook_customer: $e");
+    }
+  }
+  Future<List<Map<String, dynamic>>> loadProductsForCurrentUserByShopId() async {
+    final currentUser = FirebaseAuth.instance.currentUser;
+    if (currentUser == null) {
+      throw Exception("User chưa đăng nhập");
+    }
+
+    // Lấy shopid của user hiện tại
+    final userSnap = await _firestore.collection('users').doc(currentUser.uid).get();
+    if (!userSnap.exists) throw Exception("Không tìm thấy user");
+    final shopId = userSnap.data()?['shopid'];
+    if (shopId == null) throw Exception("User không có shopid");
+
+    // Lấy sản phẩm có shopid trùng
+    final snapshot = await _firestore
+        .collection('Products')
+        .where('shopid', isEqualTo: shopId)
+        .get();
+
+    return snapshot.docs.map((doc) {
+      final data = doc.data();
+      data['id'] = doc.id;
+      final imageUrls = data['imageUrls'] as List<dynamic>?;
+      data['imageUrls'] = imageUrls?.cast<String>() ?? [];
+      return data;
+    }).toList();
+  }
+
 }

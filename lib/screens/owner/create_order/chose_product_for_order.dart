@@ -36,7 +36,7 @@ class _ChoseProductForOrderScreenState extends State<ChoseProductForOrderScreen>
 
   Future<void> _loadProducts() async {
     setState(() => loading = true);
-    final list = await _service.loadProductsForCurrentUser();
+    final list = await _service.loadProductsForCurrentUserByShopId();
     setState(() {
       products = list;
       filteredProducts = List.from(products);
@@ -77,8 +77,14 @@ class _ChoseProductForOrderScreenState extends State<ChoseProductForOrderScreen>
             onSelected: (v) {
               if (v == 'add_product') {
                 Navigator.pushNamed(context, '/add_product_for_order').then((value) {
-                  if (value == true) _loadProducts();
+                  if (value == true) {
+                    _loadProducts();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Thêm sản phẩm thành công')),
+                    );
+                  }
                 });
+
               }
             },
             itemBuilder: (_) => [
