@@ -1,6 +1,6 @@
 // lib/screens/owner/create_order_for_customer.dart
 import 'dart:async';
-
+import 'package:ban_hang/screens/owner/create_order/setting_shipping_company_for_order.dart';
 import 'package:ban_hang/utils/message.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -15,7 +15,6 @@ class CreateOrderForCustomerScreen extends StatefulWidget {
   State<CreateOrderForCustomerScreen> createState() =>
       _CreateOrderForCustomerScreenState();
 }
-
 class _CreateOrderForCustomerScreenState
     extends State<CreateOrderForCustomerScreen> {
   late Map<String, dynamic> customerData;
@@ -27,6 +26,10 @@ class _CreateOrderForCustomerScreenState
   int totalQuantity = 0;
   double totalWeight = 0; // Khối lượng tính theo số lượng sản phẩm
   String sellerName = '';
+  String? selectedShippingPartner;
+  double? codAmount;
+  String? shippingNote;
+  Map<String, dynamic>? temporaryShippingInfo;
 
   // Thêm biến lưu địa chỉ giao hàng tạm thời
   Map<String, dynamic>? temporaryShippingAddress;
@@ -414,18 +417,74 @@ class _CreateOrderForCustomerScreenState
                       }
                     },
                   ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 8, ),
                   Text(
                     'Tổng cộng: ${message.formatCurrency(totalPrice)}',
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w500),
+                  ),
+                  // --- Đơn vị giao hàng và phí ---
+                  Container(
+                    width: double.infinity,
+                    color: Colors.white,
+                    padding: const EdgeInsets.all(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          children: [
+                            Row(
+                              children: const [
+                                Icon(Icons.local_shipping, color: Colors.green),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Đơn vị giao hàng và phí',
+                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                                ),
+                              ],
+                            ),
+                            IconButton(
+                              icon: const Icon(Icons.edit, color: Colors.blue),
+                              onPressed: () async {
+                                final result = await Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => SettingShippingCompanyForOrderScreen(totalPrice: totalPrice,totalWeight: totalWeight, initialData: temporaryShippingInfo,),
+                                  ),
+                                );
+                                if (result != null && mounted) {
+                                  setState(() {
+                                    selectedShippingPartner = result['partnerName'];
+                                    codAmount = result['codAmount'];
+                                    shippingNote = result['note'];
+                                    temporaryShippingInfo = result;
+                                    totalWeight = result['weight'] ?? totalWeight;
+                                  });
+                                }
+                              },
+
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Đối tác: ${selectedShippingPartner ?? "Chưa chọn"}',
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tiền thu hộ: ${message.formatCurrency(codAmount ?? totalPrice)}',
+                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
                   ),
                 ],
               ),
             ),
 
             const SizedBox(height: 12),
-
             // --- Địa chỉ giao hàng ---
             Container(
               width: double.infinity,
@@ -449,7 +508,6 @@ class _CreateOrderForCustomerScreenState
                           ),
                         ],
                       ),
-
                       IconButton(
                         icon: const Icon(Icons.edit,
                             color: Colors.blue),
@@ -522,9 +580,9 @@ class _CreateOrderForCustomerScreenState
                     style: const TextStyle(fontSize: 16),
                   ),
                   const SizedBox(height: 4),
-                  const Text(
-                    'Ghi chú: ',
-                    style: TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
+                  Text(
+                    'Ghi chú: ${shippingNote ?? "Không có"}',
+                    style: const TextStyle(fontSize: 16, fontStyle: FontStyle.italic),
                   ),
                 ],
               ),

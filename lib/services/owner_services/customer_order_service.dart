@@ -1,9 +1,11 @@
+import 'package:ban_hang/services/auth_services/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:vietnam_provinces/vietnam_provinces.dart';
 
 class CustomerOrderServiceLive {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
-
+  final _authService = AuthService();
   /// Lấy danh sách khách hàng của user hiện tại, role = 'customer'
   Future<List<Map<String, dynamic>>> fetchCustomers(String currentUserId) async {
     try {
@@ -274,6 +276,76 @@ class CustomerOrderServiceLive {
       data['imageUrls'] = imageUrls?.cast<String>() ?? [];
       return data;
     }).toList();
+  }
+
+
+  Future<List<Province>> initLocationData() async {
+    await _authService.initLocations();
+    return _authService.getProvinces();
+  }
+
+  Map<String, dynamic> parseAddressParts(String address, List<Province> provinces) {
+    List<String> parts = address.split('-').map((e) => e.trim()).toList();
+
+    if (parts.length < 4) {
+      return {
+        'detailAddress': address,
+        'province': null,
+        'districts': <District>[],
+        'district': null,
+        'wards': <Ward>[],
+        'ward': null,
+      };
+    }
+
+    String wardName = parts[1];
+    String districtName = parts[2];
+    String provinceName = parts[3];
+
+    Province? selectedProvince = provinces.firstWhere(
+          (p) => p.name == provinceName,
+      orElse: () => provinces.first,
+    );
+    List<District> districts = _authService.getDistricts(selectedProvince.code);
+
+    District? selectedDistrict = districts.firstWhere(
+          (d) => d.name == districtName,
+      orElse: () => districts.first,
+    );
+    List<Ward> wards = _authService.getWards(
+      selectedProvince.code,
+      selectedDistrict.code,
+    );
+
+    Ward? selectedWard = wards.firstWhere(
+          (w) => w.name == wardName,
+      orElse: () => wards.first,
+    );
+
+    return {
+      'detailAddress': parts.first,
+      'province': selectedProvince,
+      'districts': districts,
+      'district': selectedDistrict,
+      'wards': wards,
+      'ward': selectedWard,
+    };
+  }
+  Map<String, String> parseAddressString(String fullAddress) {
+    final parts = fullAddress.split(' - ');
+
+    // Lấy từng phần, nếu thiếu thì để ''
+    final address = parts.isNotEmpty ? parts[0] : '';
+    final area = parts.length > 1 ? parts[1] : '';
+    final city = parts.length > 2 ? parts[2] : '';
+    final prov = parts.length > 3 ? parts[3] : '';
+
+    return {
+      "address": address,
+      "area": area,
+      "city": city,
+      "prov": prov,
+    };
   }
 
 }

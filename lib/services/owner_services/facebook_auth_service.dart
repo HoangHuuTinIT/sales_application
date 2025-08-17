@@ -1,4 +1,5 @@
 // lib/services/facebook_services/facebook_auth_service.dart
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_facebook_auth/flutter_facebook_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -23,6 +24,23 @@ class FacebookAuthService {
       final userData = await FacebookAuth.instance.getUserData();
       final fbUserId = accessToken!.userId;
 
+      // Lấy UID người dùng hiện tại
+      final currentUid = FirebaseAuth.instance.currentUser?.uid;
+      String? shopId;
+
+      if (currentUid != null) {
+        // Lấy shopid từ bảng users
+        final userDoc = await FirebaseFirestore.instance
+            .collection('users')
+            .doc(currentUid)
+            .get();
+
+        if (userDoc.exists) {
+          shopId = userDoc.data()?['shopid']; // chú ý chữ i thường
+        }
+      }
+
+      // Lưu vào facebook_live kèm shopid
       final doc = FirebaseFirestore.instance.collection('facebook_live').doc(fbUserId);
       await doc.set({
         'fbUserId': fbUserId,
@@ -32,27 +50,48 @@ class FacebookAuthService {
         'accessToken': accessToken.token,
         'connected': false,
         'createdAt': FieldValue.serverTimestamp(),
+        'shopid': shopId, // Thêm trường shopid ở đây
       });
 
-
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đăng nhập thành công")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Đăng nhập thành công")));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Đăng nhập thất bại")));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text("Đăng nhập thất bại")));
     }
   }
 
   Future<List<Map<String, dynamic>>> loadConnectedAccounts() async {
-    final snapshot = await FirebaseFirestore.instance.collection('facebook_live').get();
+    final currentUid = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUid == null) return [];
+
+    // Lấy shopid của user hiện tại
+    final userDoc = await FirebaseFirestore.instance
+        .collection('users')
+        .doc(currentUid)
+        .get();
+
+    if (!userDoc.exists) return [];
+
+    final shopId = userDoc.data()?['shopid'];
+
+    if (shopId == null) return [];
+
+    // Lọc facebook_live theo shopid
+    final snapshot = await FirebaseFirestore.instance
+        .collection('facebook_live')
+        .where('shopid', isEqualTo: shopId)
+        .get();
+
     return snapshot.docs.map((doc) => doc.data()).toList();
   }
+
   Future<void> connectAccount(String fbUserId, String displayName) async {
     await FirebaseFirestore.instance.collection('facebook_live').doc(fbUserId).update({
       'connected': true,
       'name': displayName,
     });
   }
-
-
   Future<void> logout(String fbUserId) async {
     await FirebaseFirestore.instance.collection('facebook_live').doc(fbUserId).delete();
   }

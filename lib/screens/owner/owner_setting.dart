@@ -18,6 +18,14 @@ class OwnerSettingScreen extends StatelessWidget {
               Navigator.pushNamed(context, '/list-printer');
             },
           ),
+          ListTile(
+            leading: const Icon(Icons.local_shipping),
+            title: const Text('Cài đặt hãng vận chuyển'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () {
+              Navigator.pushNamed(context, '/list-shipping-company');
+            },
+          ),
           // Bạn có thể thêm các mục cài đặt khác ở đây
         ],
       ),

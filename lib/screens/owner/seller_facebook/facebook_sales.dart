@@ -74,7 +74,6 @@ class _FacebookSalesScreenState extends State<FacebookSalesScreen> {
 
   @override
   Widget build(BuildContext context) {
-
     final connected = accounts.where((e) => e['connected'] == true).toList();
     final notConnected = accounts.where((e) => e['connected'] == false).toList();
     return Scaffold(

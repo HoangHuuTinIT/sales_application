@@ -211,9 +211,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                 ),
               ],
             ),
-
             const SizedBox(height: 20),
-
             Expanded(
               child: _selectedType == SignUpType.owner
                   ? _buildOwnerSignUp()

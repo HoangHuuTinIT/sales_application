@@ -1,4 +1,5 @@
 import 'package:ban_hang/services/auth_services/auth_service.dart';
+import 'package:ban_hang/services/owner_services/customer_order_service.dart';
 import 'package:flutter/material.dart';
 import 'package:vietnam_provinces/vietnam_provinces.dart';
 
@@ -27,21 +28,33 @@ class _EditAddressForOrderScreenState extends State<EditAddressForOrderScreen> {
   List<District> _districts = [];
   List<Ward> _wards = [];
 
+  final _orderService = CustomerOrderServiceLive();
+
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.initialData['name']);
     _phoneController = TextEditingController(text: widget.initialData['phone']);
-    _detailAddressController = TextEditingController(text: widget.initialData['address']);
-    _initLocationData();
-  }
 
-  Future<void> _initLocationData() async {
-    await _authService.initLocations();
-    setState(() {
-      _provinces = _authService.getProvinces();
+    String fullAddress = widget.initialData['address'] ?? '';
+
+    _orderService.initLocationData().then((provinces) {
+      setState(() {
+        _provinces = provinces;
+        final parsed = _orderService.parseAddressParts(fullAddress, provinces);
+
+        _detailAddressController = TextEditingController(
+          text: parsed['detailAddress'],
+        );
+        _selectedProvince = parsed['province'];
+        _districts = parsed['districts'];
+        _selectedDistrict = parsed['district'];
+        _wards = parsed['wards'];
+        _selectedWard = parsed['ward'];
+      });
     });
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -53,18 +66,6 @@ class _EditAddressForOrderScreenState extends State<EditAddressForOrderScreen> {
           key: _formKey,
           child: ListView(
             children: [
-              TextFormField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Tên người nhận'),
-                validator: (v) => v == null || v.isEmpty ? 'Nhập tên' : null,
-              ),
-              const SizedBox(height: 8),
-              TextFormField(
-                controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Số điện thoại'),
-                validator: (v) => v == null || v.isEmpty ? 'Nhập số điện thoại' : null,
-              ),
-              const SizedBox(height: 8),
 
               // Province Dropdown
               DropdownButtonFormField<Province>(

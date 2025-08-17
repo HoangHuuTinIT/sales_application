@@ -67,6 +67,7 @@ dependencies:
   esc_pos_printer: ^4.1.0
   esc_pos_utils: ^1.1.0
   collection: ^1.16.0
+  flutter_dotenv: ^5.1.0
 
 
 
@@ -102,6 +103,7 @@ flutter:
     - assets/images/QR_PAYMENT.jpg
     - assets/images/iconfb.jpg
     - assets/images/iconfb.png
+    - .env
 
   # To add assets to your application, add an assets section, like this:
   # assets:

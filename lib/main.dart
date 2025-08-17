@@ -17,21 +17,25 @@ import 'package:ban_hang/screens/owner/seller_facebook/chose_facebook_page.dart'
 import 'package:ban_hang/screens/owner/seller_facebook/comment_on_facebook.dart';
 import 'package:ban_hang/screens/owner/seller_facebook/facebook_sales.dart';
 import 'package:ban_hang/screens/owner/seller_facebook/list_livestreams.dart';
+import 'package:ban_hang/screens/owner/shipping_setting/list_shipping_company.dart';
+import 'package:ban_hang/screens/owner/shipping_setting/setting_j_and_t.dart';
 import 'package:ban_hang/screens/staff/order_details.dart';
 import 'package:ban_hang/screens/staff/product_management.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:vietnam_provinces/vietnam_provinces.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await dotenv.load(fileName: ".env");
   await Firebase.initializeApp(
     options: DefaultFirebaseOptions.currentPlatform,
   );
   // ✅ 2. Gán publishableKey cho Stripe (nằm ngoài initializeApp)
-  Stripe.publishableKey = 'pk_test_51RpP09FYNYiKITZmveOBCkxir9ZYbkvoGbVbJ7uyxu6LzrpXChvjLPo9IZ6lyo4tbvwneqe7pX2YMNwz6DTvbaea005yov5ytq';
-
+  // Stripe.publishableKey = 'pk_test_51RpP09FYNYiKITZmveOBCkxir9ZYbkvoGbVbJ7uyxu6LzrpXChvjLPo9IZ6lyo4tbvwneqe7pX2YMNwz6DTvbaea005yov5ytq';
+  Stripe.publishableKey = dotenv.env['STRIPE_PUBLISHABLE_KEY'] ?? '';
   // ✅ 3. Áp dụng cài đặt Stripe
   await Stripe.instance.applySettings();
   await VietnamProvinces.initialize();
@@ -98,6 +102,8 @@ class MyApp extends StatelessWidget {
         '/comment-on-facebook': (_) => const CommentOnFacebookScreen(),
         '/owner-setting': (_) => const OwnerSettingScreen(),
         '/list-printer': (_) => const ListPrinterScreen(),
+        '/list-shipping-company':(_)=> const ListShippingCompanyScreen(),
+        "/setting-j-and-t" : (_)=> const SettingJAndTScreen(),
         '/setting-printer': (context) {
           final args = ModalRoute.of(context)!.settings.arguments;
           if (args != null && args is DocumentSnapshot) {

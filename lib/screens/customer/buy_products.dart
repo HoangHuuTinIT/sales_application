@@ -4,7 +4,7 @@ import 'package:ban_hang/screens/customer/home_customer.dart';
 import 'package:ban_hang/services/customer_services/stripe_payment_service.dart';
 import 'package:flutter/material.dart';
 import 'package:ban_hang/utils/message.dart';
-import 'package:ban_hang/screens/auth/signup_information.dart';
+
 import 'package:ban_hang/services/customer_services/buy_products_services.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';

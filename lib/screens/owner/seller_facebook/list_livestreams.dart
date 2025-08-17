@@ -12,6 +12,7 @@ class ListLivestreamsScreen extends StatefulWidget {
 class _ListLivestreamsScreenState extends State<ListLivestreamsScreen> {
   List<Map<String, dynamic>> livestreams = [];
   Map<String, dynamic>? page;
+  bool isLoading = false; // Thêm biến này
 
   @override
   void didChangeDependencies() {
@@ -21,15 +22,25 @@ class _ListLivestreamsScreenState extends State<ListLivestreamsScreen> {
   }
 
   Future<void> _loadLiveVideos() async {
-    final result = await FacebookLiveService().getLivestreams(page!['pageId'], page!['accessToken']);
-    setState(() => livestreams = result);
+    setState(() => isLoading = true); // Bật loading
+    try {
+      final result = await FacebookLiveService()
+          .getLivestreams(page!['pageId'], page!['accessToken']);
+      setState(() => livestreams = result);
+    } catch (e) {
+      debugPrint("Lỗi load livestream: $e");
+    } finally {
+      setState(() => isLoading = false); // Tắt loading
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: Text("Livestream của ${page?['name']}")),
-      body: livestreams.isEmpty
+      body: isLoading
+          ? const Center(child: CircularProgressIndicator()) // Xoay xoay
+          : livestreams.isEmpty
           ? const Center(child: Text("Không có livestream nào"))
           : ListView.builder(
         itemCount: livestreams.length,
@@ -55,3 +66,4 @@ class _ListLivestreamsScreenState extends State<ListLivestreamsScreen> {
     );
   }
 }
+
