@@ -1,6 +1,11 @@
+import 'dart:convert';
+import 'dart:math';
 import 'package:ban_hang/services/auth_services/auth_service.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/cupertino.dart';
+import 'package:http/http.dart' as http;
 import 'package:vietnam_provinces/vietnam_provinces.dart';
 
 class CustomerOrderServiceLive {
@@ -331,21 +336,147 @@ class CustomerOrderServiceLive {
       'ward': selectedWard,
     };
   }
-  Map<String, String> parseAddressString(String fullAddress) {
+
+
+  Future<void> createJTOrder({
+    required BuildContext context,
+    required String userId,
+    required String? shippingPartner,
+    required Map<String, dynamic> customerData,
+    required List<Map<String, dynamic>> products,
+    required double totalPrice,
+    required int totalQuantity,
+    required double totalWeight,
+    required double codAmount,
+    required String remark,
+  }) async {
+    if (shippingPartner != "J&T") {
+      throw "Chỉ hỗ trợ J&T hiện tại";
+    }
+
+    // Lấy shopid từ user
+    final userDoc = await _firestore.collection("users").doc(userId).get();
+    final shopId = userDoc.data()?["shopid"];
+    if (shopId == null) throw "Người dùng chưa có shopid";
+
+    // Query JT_setting theo shopid
+    final settingSnap = await _firestore
+        .collection("JT_setting")
+        .where(FieldPath.documentId, isEqualTo: shopId)
+        .limit(1)
+        .get();
+
+    if (settingSnap.docs.isEmpty) {
+      throw "Không tìm thấy cấu hình J&T cho shopid này";
+    }
+
+    final jt = settingSnap.docs.first.data();
+
+    // Tạo password = MD5(key + "jadada369t3")
+    final key = jt["key"];
+    final rawPass = utf8.encode("$key" "jadada369t3");
+    final md5Pass = md5.convert(rawPass).toString().toUpperCase();
+
+    // Parse địa chỉ khách hàng
+    Map<String, String> recvAddr = parseAddressString(customerData["address"]);
+    print("địa chỉ khách hàng :${customerData["address"]}");
+    print(recvAddr);
+    // Sinh txlogisticId
+    final now = DateTime.now();
+    final rand = _randomString(4);
+    final txlogisticId =
+        "ODR-${_formatDate(now)}-${_formatTime(now)}-$rand";
+
+    // BizContent
+    final bizContent = {
+      "customerCode": jt["customerCode"],
+      "txlogisticId": txlogisticId,
+      "password": md5Pass,
+      "orderType": jt["orderType"],
+      "serviceType": jt["serviceType"],
+      "sender": {
+        "name": jt["name"],
+        "mobile": jt["mobile"],
+        "prov": jt["prov"],
+        "city": jt["city"],
+        "area": jt["area"],
+        "address": jt["address"],
+      },
+      "receiver": {
+        "name": customerData["name"],
+        "mobile": customerData["phone"],
+        "prov": recvAddr["prov"],
+        "city": recvAddr["city"],
+        "area": recvAddr["area"],
+        "address": recvAddr["address"],
+      },
+      "payType": jt["payType"],
+      "goodsType": jt["goodsType"],
+      "goodsValue": totalPrice,
+      "codMoney": codAmount,
+      "remark": remark,
+      "productType": jt["productType"],
+      "isInsured": jt["isInsured"],
+      "deliveryType": jt["deliveryType"],
+      "packageInfo": {"weight": totalWeight.toString()},
+      "itemsValue": totalPrice,
+      "totalQuantity": totalQuantity,
+    };
+
+    final bizContentStr = jsonEncode(bizContent);
+
+    // Digest
+    const privateKey = "6e93e0d4344e47f0a4af7e4e75af955e";
+    final digestSrc = utf8.encode(bizContentStr + privateKey);
+    final md5Digest = md5.convert(digestSrc).bytes;
+    final digest = base64Encode(md5Digest);
+
+    // Timestamp
+    final timestamp = DateTime.now().millisecondsSinceEpoch;
+
+    // Gửi request
+    final url =
+        "https://demoopenapi.jtexpress.vn/webopenplatformapi/api/order/addOrder";
+    final res = await http.post(
+      Uri.parse(url),
+      headers: {
+        "digest": digest,
+        "timestamp": "$timestamp",
+        "apiAccount": jt["apiAccount"],
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: {"bizContent": bizContentStr},
+    );
+    print("trường apiAccount: ${jt["apiAccount"]}");
+    print("thông số jt:$jt");
+    if (res.statusCode != 200) {
+      throw "API lỗi: ${res.body}";
+    }
+    final respData = jsonDecode(res.body);
+    print("J&T Response: $respData");
+  }
+
+  // Helpers
+  static Map<String, String> parseAddressString(String fullAddress) {
     final parts = fullAddress.split(' - ');
-
-    // Lấy từng phần, nếu thiếu thì để ''
-    final address = parts.isNotEmpty ? parts[0] : '';
-    final area = parts.length > 1 ? parts[1] : '';
-    final city = parts.length > 2 ? parts[2] : '';
-    final prov = parts.length > 3 ? parts[3] : '';
-
     return {
-      "address": address,
-      "area": area,
-      "city": city,
-      "prov": prov,
+      "address": parts.isNotEmpty ? parts[0].trim() : '',
+      "area": parts.length > 1 ? parts[1].trim() : '',   // lấy cả tên + code
+      "city": parts.length > 2 ? parts[2].trim() : '',
+      "prov": parts.length > 3 ? parts[3].trim() : '',
     };
   }
 
+  String _randomString(int len) {
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    final rnd = Random();
+    return String.fromCharCodes(
+        Iterable.generate(len, (_) => chars.codeUnitAt(rnd.nextInt(chars.length))));
+  }
+
+  String _formatDate(DateTime dt) =>
+      "${dt.year}${dt.month.toString().padLeft(2, '0')}${dt.day.toString().padLeft(2, '0')}";
+  String _formatTime(DateTime dt) =>
+      "${dt.hour.toString().padLeft(2, '0')}${dt.minute.toString().padLeft(2, '0')}${dt.second.toString().padLeft(2, '0')}";
 }
+

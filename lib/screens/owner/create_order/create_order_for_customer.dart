@@ -1,6 +1,7 @@
 // lib/screens/owner/create_order_for_customer.dart
 import 'dart:async';
 import 'package:ban_hang/screens/owner/create_order/setting_shipping_company_for_order.dart';
+import 'package:ban_hang/services/owner_services/customer_order_service.dart';
 import 'package:ban_hang/utils/message.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
@@ -588,6 +589,45 @@ class _CreateOrderForCustomerScreenState
               ),
             ),
           ],
+        ),
+      ),
+      bottomNavigationBar: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: ElevatedButton.icon(
+            icon: const Icon(Icons.check),
+            label: const Text("Tạo đơn"),
+            style: ElevatedButton.styleFrom(
+              minimumSize: const Size.fromHeight(50),
+              backgroundColor: Colors.green,
+            ),
+            onPressed: () async {
+              try {
+                final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+
+                if (currentUserId == null) {
+                  message.showSnackbarfalse(context, "Bạn chưa đăng nhập!");
+                  return;
+                }
+
+                await CustomerOrderServiceLive().createJTOrder(
+                  context: context,
+                  userId: currentUserId, // uid user đăng nhập
+                  shippingPartner: selectedShippingPartner,
+                  customerData: customerData,
+                  products: selectedProducts,
+                  totalPrice: totalPrice,
+                  totalQuantity: totalQuantity,
+                  totalWeight: totalWeight,
+                  codAmount: codAmount ?? totalPrice,
+                  remark: shippingNote ?? "",
+                );
+                message.showSnackbartrue(context, "Tạo đơn thành công!");
+              } catch (e) {
+                message.showSnackbarfalse(context, "Lỗi tạo đơn: $e");
+              }
+            },
+          ),
         ),
       ),
     );
