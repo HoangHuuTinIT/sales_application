@@ -1,9 +1,7 @@
-import 'package:ban_hang/services/auth_services/auth_service.dart';
-import 'package:ban_hang/services/owner_services/customer_order_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:collection/collection.dart';
 import 'package:flutter/material.dart';
-import 'package:vietnam_provinces/vietnam_provinces.dart';
+import 'package:dropdown_search/dropdown_search.dart';
+import 'package:ban_hang/services/owner_services/customer_order_service.dart';
+import 'package:ban_hang/services/utilities/utilities_address.dart';
 
 class EditCustomerForOrderScreen extends StatefulWidget {
   final String customerId;
@@ -16,10 +14,12 @@ class EditCustomerForOrderScreen extends StatefulWidget {
   });
 
   @override
-  State<EditCustomerForOrderScreen> createState() => _EditCustomerForOrderScreenState();
+  State<EditCustomerForOrderScreen> createState() =>
+      _EditCustomerForOrderScreenState();
 }
 
-class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen> {
+class _EditCustomerForOrderScreenState
+    extends State<EditCustomerForOrderScreen> {
   final _formKey = GlobalKey<FormState>();
 
   late TextEditingController _nameController;
@@ -29,106 +29,82 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
   late TextEditingController _userIdController;
   late TextEditingController _addressDetailController;
 
-  final AuthService _authService = AuthService();
+  List<String> _provinces = [];
+  List<String> _districts = [];
+  List<String> _wards = [];
 
-  List<Province> provinces = [];
-  List<District> districts = [];
-  List<Ward> wards = [];
+  String? _selectedProvince;
+  String? _selectedDistrict;
+  String? _selectedWard;
 
-  Province? selectedProvince;
-  District? selectedDistrict;
-  Ward? selectedWard;
+  bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
-    _initData();
+    _initControllers();
+    _loadAddressData();
   }
 
-  Future<void> _initData() async {
-    await _authService.initLocations();  // Khởi tạo dữ liệu địa phương
-
-    provinces = _authService.getProvinces();
-
-    // Khởi tạo controller, địa chỉ, selectedProvince, districts, wards như cũ
-    // Ví dụ:
+  void _initControllers() {
     _userIdController = TextEditingController(text: widget.customerId);
-    _nameController = TextEditingController(text: widget.initialData['name'] ?? '');
-    _phoneController = TextEditingController(text: widget.initialData['phone'] ?? '');
-    _facebookController = TextEditingController(text: widget.initialData['facebook'] ?? '');
-    _emailController = TextEditingController(text: widget.initialData['email'] ?? '');
+    _nameController =
+        TextEditingController(text: widget.initialData['name'] ?? '');
+    _phoneController =
+        TextEditingController(text: widget.initialData['phone'] ?? '');
+    _facebookController =
+        TextEditingController(text: widget.initialData['facebook'] ?? '');
+    _emailController =
+        TextEditingController(text: widget.initialData['email'] ?? '');
     _addressDetailController = TextEditingController();
+  }
 
-    // Xử lý phân tách address và tìm selectedProvince, selectedDistrict, selectedWard như trước
+  Future<void> _loadAddressData() async {
+    await AddressUtils.loadAddressJson();
+    _provinces = AddressUtils.getProvinces();
 
-    setState(() {}); // cập nhật lại UI sau khi load xong
+    _initializeFormWithAddress();
+    setState(() { _isLoading = false; });
+  }
 
-
-    // Lấy danh sách provinces, fallback [] nếu null
-    provinces = _authService.getProvinces() ?? [];
-
+  void _initializeFormWithAddress() {
     final address = widget.initialData['address'] as String? ?? '';
+    final parsed = AddressUtils.parseFullAddress(address);
 
-    if (address.isNotEmpty) {
-      final parts = address.split(' - ');
+    _addressDetailController.text = parsed['addressDetail'] ?? '';
+    _selectedProvince = parsed['province'];
+    _selectedDistrict = parsed['district'];
 
-      if (parts.isNotEmpty) {
-        _addressDetailController.text = parts[0];
-      }
+    if (_selectedProvince != null && _selectedDistrict != null) {
+      _districts = AddressUtils.getDistricts(_selectedProvince!);
+      _wards = AddressUtils.getWards(_selectedProvince!, _selectedDistrict!);
 
-      if (parts.length >= 4 && provinces.isNotEmpty) {
-        final wardName = parts[parts.length - 3];
-        final districtName = parts[parts.length - 2];
-        final provinceName = parts[parts.length - 1];
-
-        // Tìm tỉnh, fallback null nếu không tìm thấy
-        selectedProvince = provinces.firstWhereOrNull((p) => p.name == provinceName);
-
-        if (selectedProvince != null) {
-          districts = _authService.getDistricts(selectedProvince!.code) ?? [];
-          selectedDistrict = districts.firstWhereOrNull((d) => d.name == districtName);
-
-          if (selectedDistrict != null) {
-            wards = _authService.getWards(selectedProvince!.code, selectedDistrict!.code) ?? [];
-            selectedWard = wards.firstWhereOrNull((w) => w.name == wardName);
-          } else {
-            wards = [];
-            selectedWard = null;
-          }
-        } else {
-          districts = [];
-          wards = [];
-          selectedDistrict = null;
-          selectedWard = null;
-        }
-      } else {
-        districts = [];
-        wards = [];
-        selectedProvince = null;
-        selectedDistrict = null;
-        selectedWard = null;
-      }
-    } else {
-      districts = [];
-      wards = [];
-      selectedProvince = null;
-      selectedDistrict = null;
-      selectedWard = null;
+      _selectedWard = _wards.firstWhere(
+            (w) => w.startsWith(parsed['ward'] ?? ''),
+        orElse: () => '',
+      );
+      if (_selectedWard!.isEmpty) _selectedWard = null;
     }
   }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
-    if (selectedProvince == null || selectedDistrict == null || selectedWard == null) {
+    if (_selectedProvince == null ||
+        _selectedDistrict == null ||
+        _selectedWard == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Vui lòng chọn đầy đủ địa chỉ')),
       );
       return;
     }
 
-    final addressFull =
-        '${_addressDetailController.text.trim()} - ${selectedWard!.name} - ${selectedDistrict!.name} - ${selectedProvince!.name}';
+    final addressFull = AddressUtils.buildFullAddress(
+      addressDetail: _addressDetailController.text.trim(),
+      province: _selectedProvince!,
+      district: _selectedDistrict!,
+      ward: _selectedWard!,
+    );
 
     final formData = {
       'name': _nameController.text.trim(),
@@ -142,7 +118,14 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
         .updateFacebookCustomerByFbid(widget.initialData['fbid'], formData);
 
     Navigator.pop(context, formData);
+  }
 
+  InputDecoration _dropdownDecoration(String label) {
+    return InputDecoration(
+      labelText: label,
+      border: const OutlineInputBorder(),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    );
   }
 
   @override
@@ -152,153 +135,160 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
 
     return Scaffold(
       appBar: AppBar(title: const Text('Chỉnh sửa thông tin khách hàng')),
-      body: Padding(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Padding(
         padding: const EdgeInsets.all(12),
         child: Form(
           key: _formKey,
-          child:ListView(
+          child: ListView(
             children: [
               Row(
                 children: [
                   if (widget.initialData['avatarUrl'] != null)
                     CircleAvatar(
                       radius: 40,
-                      backgroundImage: NetworkImage(widget.initialData['avatarUrl']),
+                      backgroundImage: NetworkImage(
+                          widget.initialData['avatarUrl']),
                     )
                   else
-                    const CircleAvatar(radius: 40, child: Icon(Icons.person)),
+                    const CircleAvatar(
+                        radius: 40, child: Icon(Icons.person)),
                   const SizedBox(width: 16),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 12, vertical: 6),
                     decoration: BoxDecoration(
                       color: statusColor,
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
                       status,
-                      style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 20),
-
-              // Mã người dùng (readonly)
               TextField(
-                controller: _userIdController,
-                readOnly: true,
-                decoration: const InputDecoration(
-                  labelText: 'Mã người dùng',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
+                  controller: _userIdController,
+                  readOnly: true,
+                  decoration: _dropdownDecoration('Mã người dùng')),
               const SizedBox(height: 12),
-
-              // Tên
               TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Tên',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
+                  controller: _nameController,
+                  decoration: _dropdownDecoration('Tên')),
               const SizedBox(height: 12),
-
-              // Điện thoại
               TextField(
-                controller: _phoneController,
-                keyboardType: TextInputType.phone,
-                decoration: const InputDecoration(
-                  labelText: 'Điện thoại',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
+                  controller: _phoneController,
+                  keyboardType: TextInputType.phone,
+                  decoration: _dropdownDecoration('Điện thoại')),
               const SizedBox(height: 12),
-
-              // Facebook
               TextField(
-                controller: _facebookController,
-                decoration: const InputDecoration(
-                  labelText: 'Facebook',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
+                  controller: _facebookController,
+                  decoration: _dropdownDecoration('Facebook')),
               const SizedBox(height: 12),
-
-              // Email
               TextField(
-                controller: _emailController,
-                keyboardType: TextInputType.emailAddress,
-                decoration: const InputDecoration(
-                  labelText: 'Email',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                ),
-              ),
+                  controller: _emailController,
+                  keyboardType: TextInputType.emailAddress,
+                  decoration: _dropdownDecoration('Email')),
               const SizedBox(height: 16),
+              Text('Địa chỉ',
+                  style: Theme.of(context).textTheme.titleMedium),
+              const SizedBox(height: 12),
 
-              Text('Địa chỉ', style: Theme.of(context).textTheme.titleMedium),
-
-              // Dropdown tỉnh
-              DropdownButtonFormField<Province>(
-                value: selectedProvince,
-                items: provinces.map((p) => DropdownMenuItem(value: p, child: Text(p.name))).toList(),
-                decoration: const InputDecoration(
-                  labelText: 'Tỉnh/Thành phố',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              // Dropdown Tỉnh/Thành phố
+              DropdownSearch<String>(
+                popupProps: const PopupProps.menu(
+                  showSearchBox: true,
+                  searchFieldProps: TextFieldProps(
+                    decoration: InputDecoration(
+                      hintText: 'Tìm kiếm tỉnh/thành...',
+                    ),
+                  ),
                 ),
-                onChanged: (p) {
+                items: _provinces,
+                dropdownDecoratorProps: DropDownDecoratorProps(
+                  dropdownSearchDecoration:
+                  _dropdownDecoration('Tỉnh/Thành phố'),
+                ),
+                onChanged: (value) {
                   setState(() {
-                    selectedProvince = p;
-                    selectedDistrict = null;
-                    selectedWard = null;
-                    districts = p != null ? _authService.getDistricts(p.code) ?? [] : [];
-                    wards = [];
+                    _selectedProvince = value;
+                    _selectedDistrict = null;
+                    _selectedWard = null;
+                    _districts = value != null
+                        ? AddressUtils.getDistricts(value)
+                        : [];
+                    _wards = [];
                   });
                 },
+                selectedItem: _selectedProvince,
+                validator: (value) =>
+                value == null ? 'Vui lòng chọn tỉnh' : null,
               ),
               const SizedBox(height: 12),
 
-              // Dropdown huyện
-              DropdownButtonFormField<District>(
-                value: selectedDistrict,
-                items: districts.map((d) => DropdownMenuItem(value: d, child: Text(d.name))).toList(),
-                decoration: const InputDecoration(
-                  labelText: 'Quận/Huyện',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              // Dropdown Quận/Huyện
+              DropdownSearch<String>(
+                popupProps: const PopupProps.menu(
+                  showSearchBox: true,
+                  searchFieldProps: TextFieldProps(
+                    decoration: InputDecoration(
+                      hintText: 'Tìm kiếm quận/huyện...',
+                    ),
+                  ),
                 ),
-                onChanged: (d) {
+                items: _districts,
+                dropdownDecoratorProps: DropDownDecoratorProps(
+                  dropdownSearchDecoration:
+                  _dropdownDecoration('Quận/Huyện'),
+                ),
+                onChanged: (value) {
                   setState(() {
-                    selectedDistrict = d;
-                    selectedWard = null;
-                    wards = (d != null && selectedProvince != null)
-                        ? _authService.getWards(selectedProvince!.code, d.code) ?? []
+                    _selectedDistrict = value;
+                    _selectedWard = null;
+                    _wards = (value != null && _selectedProvince != null)
+                        ? AddressUtils.getWards(
+                        _selectedProvince!, value)
                         : [];
                   });
                 },
+                selectedItem: _selectedDistrict,
+                enabled: _selectedProvince != null,
+                validator: (value) =>
+                value == null ? 'Vui lòng chọn quận/huyện' : null,
               ),
               const SizedBox(height: 12),
 
-              // Dropdown xã
-              DropdownButtonFormField<Ward>(
-                value: selectedWard,
-                items: wards.map((w) => DropdownMenuItem(value: w, child: Text(w.name))).toList(),
-                decoration: const InputDecoration(
-                  labelText: 'Xã/Phường',
-                  border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              // Dropdown Xã/Phường
+              DropdownSearch<String>(
+                itemAsString: (String? item) =>
+                item?.split('-').first ?? '',
+                popupProps: const PopupProps.menu(
+                  showSearchBox: true,
+                  searchFieldProps: TextFieldProps(
+                    decoration: InputDecoration(
+                      hintText: 'Tìm kiếm xã/phường...',
+                    ),
+                  ),
                 ),
-                onChanged: (w) {
+                items: _wards,
+                dropdownDecoratorProps: DropDownDecoratorProps(
+                  dropdownSearchDecoration:
+                  _dropdownDecoration('Xã/Phường'),
+                ),
+                onChanged: (value) {
                   setState(() {
-                    selectedWard = w;
+                    _selectedWard = value;
                   });
                 },
+                selectedItem: _selectedWard,
+                enabled: _selectedDistrict != null,
+                validator: (value) =>
+                value == null ? 'Vui lòng chọn xã/phường' : null,
               ),
               const SizedBox(height: 12),
 
@@ -309,7 +299,8 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
                   labelText: 'Địa chỉ chi tiết',
                   hintText: 'Ví dụ: Số nhà, tên đường...',
                   border: OutlineInputBorder(),
-                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  contentPadding:
+                  EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
               ),
               const SizedBox(height: 24),
@@ -323,7 +314,7 @@ class _EditCustomerForOrderScreenState extends State<EditCustomerForOrderScreen>
                 child: const Text('Xác nhận'),
               ),
             ],
-          )
+          ),
         ),
       ),
     );

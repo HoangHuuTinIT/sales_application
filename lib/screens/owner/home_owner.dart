@@ -1,4 +1,5 @@
 import 'package:ban_hang/screens/auth/signin.dart';
+import 'package:ban_hang/screens/owner/order_management/order_created.dart';
 import 'package:ban_hang/screens/staff/order_management.dart';
 import 'package:flutter/material.dart';
 import 'package:ban_hang/screens/staff/categories_management.dart';
@@ -144,6 +145,20 @@ class HomeOwnerScreen extends StatelessWidget {
                     );
                   },
                 ),
+                _buildSection(
+                  context,
+                  icon: Icons.assignment, // biểu tượng đơn hàng đã tạo
+                  title: 'Đơn đã tạo',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const OrderCreatedScreen(),
+                      ),
+                    );
+                  },
+                ),
+
                 _buildSection(
                   context,
                   icon: Icons.settings,

@@ -1,7 +1,6 @@
-import 'package:ban_hang/services/auth_services/auth_service.dart';
-import 'package:ban_hang/services/owner_services/customer_order_service.dart';
+import 'package:ban_hang/services/utilities/utilities_address.dart';
 import 'package:flutter/material.dart';
-import 'package:vietnam_provinces/vietnam_provinces.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 
 
 class EditAddressForOrderScreen extends StatefulWidget {
@@ -14,50 +13,47 @@ class EditAddressForOrderScreen extends StatefulWidget {
 
 class _EditAddressForOrderScreenState extends State<EditAddressForOrderScreen> {
   final _formKey = GlobalKey<FormState>();
-  final _authService = AuthService();
 
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
   late TextEditingController _detailAddressController;
 
-  Province? _selectedProvince;
-  District? _selectedDistrict;
-  Ward? _selectedWard;
-
-  late List<Province> _provinces;
-  List<District> _districts = [];
-  List<Ward> _wards = [];
-
-  final _orderService = CustomerOrderServiceLive();
+  String? _selectedProvince;
+  String? _selectedDistrict;
+  String? _selectedWard;
 
   @override
   void initState() {
     super.initState();
+    // Load JSON
+    AddressUtils.loadAddressJson().then((_) {
+      setState(() {}); // refresh UI khi có dữ liệu
+    });
     _nameController = TextEditingController(text: widget.initialData['name']);
     _phoneController = TextEditingController(text: widget.initialData['phone']);
 
-    String fullAddress = widget.initialData['address'] ?? '';
+    final fullAddress = widget.initialData['address'] ?? '';
+    final parsed = AddressUtils.parseFullAddress(fullAddress);
 
-    _orderService.initLocationData().then((provinces) {
-      setState(() {
-        _provinces = provinces;
-        final parsed = _orderService.parseAddressParts(fullAddress, provinces);
 
-        _detailAddressController = TextEditingController(
-          text: parsed['detailAddress'],
-        );
-        _selectedProvince = parsed['province'];
-        _districts = parsed['districts'];
-        _selectedDistrict = parsed['district'];
-        _wards = parsed['wards'];
-        _selectedWard = parsed['ward'];
-      });
-    });
+    _detailAddressController = TextEditingController(
+      text: parsed['addressDetail'] ?? '',
+    );
+    _selectedProvince = parsed['province'];
+    _selectedDistrict = parsed['district'];
+    _selectedWard = parsed['ward'];
   }
-
 
   @override
   Widget build(BuildContext context) {
+    final provinces = AddressUtils.getProvinces();
+    final districts = _selectedProvince != null
+        ? AddressUtils.getDistricts(_selectedProvince!)
+        : <String>[];
+    final wards = (_selectedProvince != null && _selectedDistrict != null)
+        ? AddressUtils.getWards(_selectedProvince!, _selectedDistrict!)
+        : <String>[];
+
     return Scaffold(
       appBar: AppBar(title: const Text('Sửa địa chỉ giao hàng')),
       body: Padding(
@@ -66,66 +62,69 @@ class _EditAddressForOrderScreenState extends State<EditAddressForOrderScreen> {
           key: _formKey,
           child: ListView(
             children: [
-
-              // Province Dropdown
-              DropdownButtonFormField<Province>(
-                value: _selectedProvince,
-                decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố'),
-                items: _provinces
-                    .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
-                    .toList(),
-                onChanged: (province) {
+              /// Province
+              DropdownSearch<String>(
+                items: provinces,
+                selectedItem: _selectedProvince,
+                popupProps: const PopupProps.menu(
+                  showSearchBox: true,
+                  title: Text('Chọn Tỉnh/Thành phố'),
+                ),
+                dropdownDecoratorProps: const DropDownDecoratorProps(
+                  dropdownSearchDecoration: InputDecoration(labelText: 'Tỉnh/Thành phố'),
+                ),
+                validator: (v) => v == null ? 'Chọn tỉnh/thành phố' : null,
+                onChanged: (value) {
                   setState(() {
-                    _selectedProvince = province;
+                    _selectedProvince = value;
                     _selectedDistrict = null;
                     _selectedWard = null;
-                    _districts = province != null
-                        ? _authService.getDistricts(province.code)
-                        : [];
-                    _wards = [];
                   });
                 },
-                validator: (v) => v == null ? 'Chọn tỉnh/thành phố' : null,
               ),
               const SizedBox(height: 8),
 
-              // District Dropdown
-              if (_districts.isNotEmpty)
-                DropdownButtonFormField<District>(
-                  value: _selectedDistrict,
-                  decoration: const InputDecoration(labelText: 'Quận/Huyện'),
-                  items: _districts
-                      .map((d) => DropdownMenuItem(value: d, child: Text(d.name)))
-                      .toList(),
-                  onChanged: (district) {
-                    setState(() {
-                      _selectedDistrict = district;
-                      _selectedWard = null;
-                      _wards = district != null
-                          ? _authService.getWards(
-                          _selectedProvince!.code, district.code)
-                          : [];
-                    });
-                  },
-                  validator: (v) => v == null ? 'Chọn quận/huyện' : null,
+              /// District
+              DropdownSearch<String>(
+                items: districts,
+                selectedItem: _selectedDistrict,
+                popupProps: const PopupProps.menu(
+                  showSearchBox: true,
+                  title: Text('Chọn Quận/Huyện'),
                 ),
+                dropdownDecoratorProps: const DropDownDecoratorProps(
+                  dropdownSearchDecoration: InputDecoration(labelText: 'Quận/Huyện'),
+                ),
+                validator: (v) => v == null ? 'Chọn quận/huyện' : null,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedDistrict = value;
+                    _selectedWard = null;
+                  });
+                },
+                enabled: _selectedProvince != null,
+              ),
               const SizedBox(height: 8),
 
-              // Ward Dropdown
-              if (_wards.isNotEmpty)
-                DropdownButtonFormField<Ward>(
-                  value: _selectedWard,
-                  decoration: const InputDecoration(labelText: 'Xã/Phường'),
-                  items: _wards
-                      .map((w) => DropdownMenuItem(value: w, child: Text(w.name)))
-                      .toList(),
-                  onChanged: (ward) {
-                    setState(() {
-                      _selectedWard = ward;
-                    });
-                  },
-                  validator: (v) => v == null ? 'Chọn xã/phường' : null,
+              /// Ward
+              DropdownSearch<String>(
+                items: wards,
+                selectedItem: _selectedWard,
+                popupProps: const PopupProps.menu(
+                  showSearchBox: true,
+                  title: Text('Chọn Xã/Phường'),
                 ),
+                dropdownDecoratorProps: const DropDownDecoratorProps(
+                  dropdownSearchDecoration: InputDecoration(labelText: 'Xã/Phường'),
+                ),
+                validator: (v) => v == null ? 'Chọn xã/phường' : null,
+                onChanged: (value) {
+                  setState(() {
+                    _selectedWard = value;
+                  });
+                },
+                enabled: _selectedDistrict != null,
+              ),
               const SizedBox(height: 8),
 
               TextFormField(
@@ -138,8 +137,13 @@ class _EditAddressForOrderScreenState extends State<EditAddressForOrderScreen> {
               ElevatedButton(
                 onPressed: () {
                   if (_formKey.currentState!.validate()) {
-                    final fullAddress =
-                        '${_detailAddressController.text} - ${_selectedWard?.name ?? ''} - ${_selectedDistrict?.name ?? ''} - ${_selectedProvince?.name ?? ''}';
+                    final fullAddress = AddressUtils.buildFullAddress(
+                      addressDetail: _detailAddressController.text,
+                      ward: _selectedWard ?? '',
+                      district: _selectedDistrict ?? '',
+                      province: _selectedProvince ?? '',
+                    );
+
                     Navigator.pop(context, {
                       'name': _nameController.text,
                       'phone': _phoneController.text,

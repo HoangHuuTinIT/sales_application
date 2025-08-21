@@ -16,7 +16,7 @@ class ShippingCompanyService {
     if (jtDoc.exists) {
       partners.add({
         'name': 'J&T',
-        'logoUrl': 'https://upload.wikimedia.org/.../j&t_logo.png', // placeholder
+
         ...jtDoc.data()!,
       });
     }

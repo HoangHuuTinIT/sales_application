@@ -1,7 +1,7 @@
-import 'package:ban_hang/services/auth_services/auth_service.dart';
+import 'package:ban_hang/services/utilities/utilities_address.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
 import 'package:ban_hang/services/owner_services/setting_j_and_t_services.dart';
-
 
 class SettingJAndTScreen extends StatefulWidget {
   const SettingJAndTScreen({super.key});
@@ -22,21 +22,22 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
   final mobileController = TextEditingController();
   final addressController = TextEditingController();
 
-  final AuthService _authService = AuthService();
-
-  // selections
-  int? selectedProvinceCode;
-  int? selectedDistrictCode;
-  int? selectedWardCode;
+  // THAY ĐỔI 1: Sử dụng String để lưu tên, thay vì int code
+  String? selectedProvinceName;
+  String? selectedDistrictName;
+  String? selectedWardName; // Sẽ lưu chuỗi "Tên Phường-Mã"
 
   // nâng cao
-  String orderType = "1"; // mặc định đơn bình thường
-  String serviceType = "1"; // Pickup mặc định
+  String orderType = "1";
+  String serviceType = "1";
   String payType = "CC_CASH";
   String productType = "EXPRESS";
-  String goodsType = "bm000010"; // hàng hóa mặc định
+  String goodsType = "bm000010";
   String deliveryType = "1";
   String isInsured = "0";
+
+  bool _isLoading = true;
+
   @override
   void dispose() {
     apiAccountController.dispose();
@@ -52,25 +53,21 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
   @override
   void initState() {
     super.initState();
-    _authService.initLocations(); // load dữ liệu tỉnh huyện xã
-    _loadConfig(); // load dữ liệu từ Firestore
+    _loadInitialData();
   }
 
+  Future<void> _loadInitialData() async {
+    await AddressUtils.loadAddressJson();
+    await _loadConfig();
+    setState(() {
+      _isLoading = false;
+    });
+  }
+
+  // THAY ĐỔI 2: Cập nhật hàm load để dùng AddressUtils và biến String
   Future<void> _loadConfig() async {
     final data = await SettingJAndTServices.getConfig();
     if (data == null) return;
-
-    final provinces = _authService.getProvinces();
-    final districts = data["prov"] != null
-        ? _authService.getDistricts(
-        provinces.firstWhere((p) => p.name == data["prov"]).code)
-        : [];
-    final wards = (data["prov"] != null && data["city"] != null)
-        ? _authService.getWards(
-      provinces.firstWhere((p) => p.name == data["prov"]).code,
-      districts.firstWhere((d) => d.name == data["city"]).code,
-    )
-        : [];
 
     setState(() {
       customerCodeController.text = data["customerCode"] ?? "";
@@ -79,28 +76,18 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
       nameController.text = data["name"] ?? "";
       mobileController.text = data["mobile"] ?? "";
       addressController.text = data["address"] ?? "";
+      selectedProvinceName = data["prov"];
+      selectedDistrictName = data["city"];
+      selectedWardName = data["area"];
 
-      // tìm code dựa vào tên đã lưu
-      if (data["prov"] != null) {
-        final province = provinces.firstWhere((p) => p.name == data["prov"]);
-        selectedProvinceCode = province.code;
+      // if (data["prov"] != null && data["city"] != null && data["area"] != null) {
+      //   selectedWardName = AddressUtils.findWardByName(
+      //     province: data["prov"],
+      //     district: data["city"],
+      //     wardName: data["area"],
+      //   );
+      // }
 
-        if (data["city"] != null) {
-          final district = _authService
-              .getDistricts(province.code)
-              .firstWhere((d) => d.name == data["city"]);
-          selectedDistrictCode = district.code;
-
-          if (data["area"] != null) {
-            final ward = _authService
-                .getWards(province.code, district.code)
-                .firstWhere((w) => w.name == data["area"]);
-            selectedWardCode = ward.code;
-          }
-        }
-      }
-
-      // nâng cao
       orderType = data["orderType"] ?? orderType;
       serviceType = data["serviceType"] ?? serviceType;
       payType = data["payType"] ?? payType;
@@ -111,15 +98,14 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
     });
   }
 
-
-
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Cài đặt J&T Express")),
-      body: Column(
+      body: _isLoading
+          ? const Center(child: CircularProgressIndicator())
+          : Column(
         children: [
-          // Tabs
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
@@ -153,23 +139,8 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
         padding: const EdgeInsets.all(16),
         child: ElevatedButton(
           onPressed: () async {
-            if (isDefaultTab) {
-              final provName = selectedProvinceCode != null
-                  ? _authService.getProvinces()
-                  .firstWhere((p) => p.code == selectedProvinceCode!)
-                  .name
-                  : null;
-              final cityName = selectedDistrictCode != null
-                  ? _authService.getDistricts(selectedProvinceCode!)
-                  .firstWhere((d) => d.code == selectedDistrictCode!)
-                  .name
-                  : null;
-              final areaName = selectedWardCode != null
-                  ? _authService.getWards(selectedProvinceCode!, selectedDistrictCode!)
-                  .firstWhere((w) => w.code == selectedWardCode!)
-                  .name
-                  : null;
-
+            try {
+              // Lưu cấu hình mặc định
               await SettingJAndTServices.saveDefaultConfig(
                 apiAccount: apiAccountController.text,
                 customerCode: customerCodeController.text,
@@ -177,12 +148,13 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
                 password: passwordController.text,
                 name: nameController.text,
                 mobile: mobileController.text,
-                prov: provName,
-                city: cityName,
-                area: areaName,
+                prov: selectedProvinceName,
+                city: selectedDistrictName,
+                area: selectedWardName, // lưu nguyên "Tên-Mã"
                 address: addressController.text,
               );
-            } else {
+
+              // Lưu cấu hình nâng cao
               await SettingJAndTServices.saveAdvancedConfig(
                 orderType: orderType,
                 serviceType: serviceType,
@@ -192,10 +164,15 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
                 deliveryType: deliveryType,
                 isInsured: isInsured,
               );
+
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Đã lưu cấu hình thành công")),
+              );
+            } catch (e) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text("Lỗi khi lưu cấu hình: $e")),
+              );
             }
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("Đã lưu cấu hình")),
-            );
           },
 
           child: const Text("Lưu"),
@@ -206,148 +183,155 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
 
   /// FORM MẶC ĐỊNH
   Widget _buildDefaultForm() {
-    final provinces = _authService.getProvinces();
-    final districts = selectedProvinceCode != null
-        ? _authService.getDistricts(selectedProvinceCode!)
-        : [];
-    final wards = (selectedProvinceCode != null && selectedDistrictCode != null)
-        ? _authService.getWards(selectedProvinceCode!, selectedDistrictCode!)
-        : [];
+    // Luôn lấy dữ liệu từ AddressUtils
+    final provinces = AddressUtils.getProvinces();
+    final districts = selectedProvinceName != null
+        ? AddressUtils.getDistricts(selectedProvinceName!)
+        : <String>[];
+    final wards = (selectedProvinceName != null && selectedDistrictName != null)
+        ? AddressUtils.getWards(selectedProvinceName!, selectedDistrictName!)
+        : <String>[];
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(
-          controller: customerCodeController,
-          decoration: const InputDecoration(labelText: "Customer Code"),
-        ),
-        TextField(
-          controller: keyController,
-          decoration: const InputDecoration(labelText: "Key"),
-        ),
-        TextField(
-          controller: passwordController,
-          decoration: const InputDecoration(labelText: "Password"),
-          obscureText: true,
-        ),
+        TextField(controller: customerCodeController, decoration: const InputDecoration(labelText: "Customer Code")),
+        TextField(controller: keyController, decoration: const InputDecoration(labelText: "Key")),
+        TextField(controller: passwordController, decoration: const InputDecoration(labelText: "Password"), obscureText: true),
         const SizedBox(height: 12),
         TextField(controller: nameController, decoration: const InputDecoration(labelText: "Tên người gửi")),
         TextField(controller: mobileController, decoration: const InputDecoration(labelText: "SĐT người gửi")),
         const SizedBox(height: 12),
-        DropdownButtonFormField<int>(
-          decoration: const InputDecoration(labelText: "Tỉnh/Thành"),
-          value: selectedProvinceCode,
-          items: provinces
-              .map((p) => DropdownMenuItem<int>(value: p.code, child: Text(p.name)))
-              .toList(),
-          onChanged: (val) => setState(() {
-            selectedProvinceCode = val;
-            selectedDistrictCode = null;
-            selectedWardCode = null;
-          }),
+
+        // THAY ĐỔI 4: Cập nhật DropdownSearch để dùng biến String
+        DropdownSearch<String>(
+          popupProps: const PopupProps.menu(showSearchBox: true, title: Text('Chọn Tỉnh/Thành phố')),
+          items: provinces,
+          selectedItem: selectedProvinceName,
+          dropdownDecoratorProps: const DropDownDecoratorProps(
+            dropdownSearchDecoration: InputDecoration(labelText: "Tỉnh/Thành"),
+          ),
+          onChanged: (value) {
+            if (value == null || value == selectedProvinceName) return;
+            setState(() {
+              selectedProvinceName = value;
+              selectedDistrictName = null;
+              selectedWardName = null;
+            });
+          },
         ),
-        DropdownButtonFormField<int>(
-          decoration: const InputDecoration(labelText: "Quận/Huyện"),
-          value: selectedDistrictCode,
-          items: districts
-              .map((d) => DropdownMenuItem<int>(
-            value: d.code,
-            child: Text(d.name),
-          ))
-              .toList(),
-          onChanged: (val) => setState(() {
-            selectedDistrictCode = val;
-            selectedWardCode = null;
-          }),
+        const SizedBox(height: 12),
+        DropdownSearch<String>(
+          popupProps: const PopupProps.menu(showSearchBox: true, title: Text('Chọn Quận/Huyện')),
+          items: districts,
+          selectedItem: selectedDistrictName,
+          dropdownDecoratorProps: const DropDownDecoratorProps(
+            dropdownSearchDecoration: InputDecoration(labelText: "Quận/Huyện"),
+          ),
+          onChanged: (value) {
+            if (value == null || value == selectedDistrictName) return;
+            setState(() {
+              selectedDistrictName = value;
+              selectedWardName = null;
+            });
+          },
+          enabled: selectedProvinceName != null,
         ),
-        DropdownButtonFormField<int>(
-          decoration: const InputDecoration(labelText: "Phường/Xã"),
-          value: selectedWardCode,
-          items: wards
-              .map((w) => DropdownMenuItem<int>(
-            value: w.code,
-            child: Text(w.name),
-          ))
-              .toList(),
-          onChanged: (val) => setState(() => selectedWardCode = val),
+        const SizedBox(height: 12),
+        DropdownSearch<String>(
+          popupProps: const PopupProps.menu(
+              showSearchBox: true, title: Text('Chọn Xã/Phường')),
+          items: wards,
+          // wards là List<String> như "Phường Long Thạnh Mỹ-028TPT19"
+          selectedItem: selectedWardName,
+          dropdownDecoratorProps: const DropDownDecoratorProps(
+            dropdownSearchDecoration: InputDecoration(labelText: "Xã/Phường"),
+          ),
+          onChanged: (value) {
+            setState(() {
+              selectedWardName = value; // lưu nguyên "Tên-Mã" vào biến
+            });
+          },
+          enabled: selectedDistrictName != null,
         ),
+        const SizedBox(height: 12),
         TextField(controller: addressController, decoration: const InputDecoration(labelText: "Địa chỉ chi tiết")),
       ],
     );
   }
 
-  /// FORM NÂNG CAO
+  // ... hàm _buildAdvancedForm không đổi
   Widget _buildAdvancedForm() {
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        DropdownButtonFormField(
-          value: orderType,
-          decoration: const InputDecoration(labelText: "Loại đơn đặt"),
-          items: const [
-            DropdownMenuItem(value: "1", child: Text("Đơn bình thường")),
-            DropdownMenuItem(value: "2", child: Text("Đơn chuyển hoàn")),
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DropdownButtonFormField(
+              value: orderType,
+              decoration: const InputDecoration(labelText: "Loại đơn đặt"),
+              items: const [
+                DropdownMenuItem(value: "1", child: Text("Đơn bình thường")),
+                DropdownMenuItem(value: "2", child: Text("Đơn chuyển hoàn")),
+              ],
+              onChanged: (val) => setState(() => orderType = val!),
+            ),
+            DropdownButtonFormField(
+              value: serviceType,
+              decoration: const InputDecoration(labelText: "Loại dịch vụ"),
+              items: const [
+                DropdownMenuItem(value: "1", child: Text("Pickup")),
+                DropdownMenuItem(value: "6", child: Text("Drop off")),
+              ],
+              onChanged: (val) => setState(() => serviceType = val!),
+            ),
+            DropdownButtonFormField(
+              value: payType,
+              decoration: const InputDecoration(labelText: "Phương thức thanh toán"),
+              items: const [
+                DropdownMenuItem(value: "PP_PM", child: Text("Thanh toán cuối tháng")),
+                DropdownMenuItem(value: "PP_CASH", child: Text("Người gửi thanh toán")),
+                DropdownMenuItem(value: "CC_CASH", child: Text("Người nhận thanh toán")),
+              ],
+              onChanged: (val) => setState(() => payType = val!),
+            ),
+            DropdownButtonFormField(
+              value: productType,
+              decoration: const InputDecoration(labelText: "Loại vận chuyển"),
+              items: const [
+                DropdownMenuItem(value: "EXPRESS", child: Text("EXPRESS")),
+                DropdownMenuItem(value: "FAST", child: Text("FAST")),
+                DropdownMenuItem(value: "SUPER", child: Text("SUPER")),
+              ],
+              onChanged: (val) => setState(() => productType = val!),
+            ),
+            DropdownButtonFormField(
+              value: goodsType,
+              decoration: const InputDecoration(labelText: "Loại hàng hóa"),
+              items: const [
+                DropdownMenuItem(value: "bm000001", child: Text("Tài liệu")),
+                DropdownMenuItem(value: "bm000010", child: Text("Hàng hóa")),
+                DropdownMenuItem(value: "bm000011", child: Text("Hàng tươi sống")),
+              ],
+              onChanged: (val) => setState(() => goodsType = val!),
+            ),
+            DropdownButtonFormField(
+              value: deliveryType,
+              decoration: const InputDecoration(labelText: "Loại phát hàng"),
+              items: const [
+                DropdownMenuItem(value: "1", child: Text("Phát bình thường")),
+                DropdownMenuItem(value: "2", child: Text("Khách hàng tự đến lấy")),
+              ],
+              onChanged: (val) => setState(() => deliveryType = val!),
+            ),
+            DropdownButtonFormField(
+              value: isInsured,
+              decoration: const InputDecoration(labelText: "Khai giá"),
+              items: const [
+     DropdownMenuItem(value: "0", child: Text("Không")),
+                DropdownMenuItem(value: "1", child: Text("Có")),
+              ],
+              onChanged: (val) => setState(() => isInsured = val!),
+            ),
           ],
-          onChanged: (val) => setState(() => orderType = val!),
-        ),
-        DropdownButtonFormField(
-          value: serviceType,
-          decoration: const InputDecoration(labelText: "Loại dịch vụ"),
-          items: const [
-            DropdownMenuItem(value: "1", child: Text("Pickup")),
-            DropdownMenuItem(value: "6", child: Text("Drop off")),
-          ],
-          onChanged: (val) => setState(() => serviceType = val!),
-        ),
-        DropdownButtonFormField(
-          value: payType,
-          decoration: const InputDecoration(labelText: "Phương thức thanh toán"),
-          items: const [
-            DropdownMenuItem(value: "PP_PM", child: Text("Thanh toán cuối tháng")),
-            DropdownMenuItem(value: "PP_CASH", child: Text("Người gửi thanh toán")),
-            DropdownMenuItem(value: "CC_CASH", child: Text("Người nhận thanh toán")),
-          ],
-          onChanged: (val) => setState(() => payType = val!),
-        ),
-        DropdownButtonFormField(
-          value: productType,
-          decoration: const InputDecoration(labelText: "Loại vận chuyển"),
-          items: const [
-            DropdownMenuItem(value: "EXPRESS", child: Text("EXPRESS")),
-            DropdownMenuItem(value: "FAST", child: Text("FAST")),
-            DropdownMenuItem(value: "SUPER", child: Text("SUPER")),
-          ],
-          onChanged: (val) => setState(() => productType = val!),
-        ),
-        DropdownButtonFormField(
-          value: goodsType,
-          decoration: const InputDecoration(labelText: "Loại hàng hóa"),
-          items: const [
-            DropdownMenuItem(value: "bm000001", child: Text("Tài liệu")),
-            DropdownMenuItem(value: "bm000010", child: Text("Hàng hóa")),
-            DropdownMenuItem(value: "bm000011", child: Text("Hàng tươi sống")),
-          ],
-          onChanged: (val) => setState(() => goodsType = val!),
-        ),
-        DropdownButtonFormField(
-          value: deliveryType,
-          decoration: const InputDecoration(labelText: "Loại phát hàng"),
-          items: const [
-            DropdownMenuItem(value: "1", child: Text("Phát bình thường")),
-            DropdownMenuItem(value: "2", child: Text("Khách hàng tự đến lấy")),
-          ],
-          onChanged: (val) => setState(() => deliveryType = val!),
-        ),
-        DropdownButtonFormField(
-          value: isInsured,
-          decoration: const InputDecoration(labelText: "Khai giá"),
-          items: const [
-            DropdownMenuItem(value: "0", child: Text("Không")),
-            DropdownMenuItem(value: "1", child: Text("Có")),
-          ],
-          onChanged: (val) => setState(() => isInsured = val!),
-        ),
-      ],
-    );
+        );
   }
 }

@@ -18,6 +18,7 @@ class CreateOrderForCustomerScreen extends StatefulWidget {
 }
 class _CreateOrderForCustomerScreenState
     extends State<CreateOrderForCustomerScreen> {
+  bool isLoading = false;
   late Map<String, dynamic> customerData;
   Map<String, dynamic>? selectedProduct;
   int quantity = 1;
@@ -43,6 +44,12 @@ class _CreateOrderForCustomerScreenState
     super.initState();
     customerData = widget.customerData; // Không cần .data() nữa
     _getSellerName();
+    temporaryShippingAddress = {
+      'phone': customerData['phone'] ?? 'Chưa có số điện thoại',
+      'name': customerData['name'] ?? 'Chưa có tên',
+      'address': customerData['address'] ?? 'Chưa có địa chỉ',
+    };
+
   }
   Future<void> _getSellerName() async {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
@@ -80,9 +87,16 @@ class _CreateOrderForCustomerScreenState
       setState(() {
         selectedProducts = loadedProducts;
         _calculateTotal();
+
+        // ✅ Reset lại shipping info khi đổi sản phẩm
+        selectedShippingPartner = null;
+        codAmount = null;
+        shippingNote = null;
+        temporaryShippingInfo = null;
       });
     }
   }
+
 
   void _calculateTotal() {
     totalPrice = 0;
@@ -236,7 +250,6 @@ class _CreateOrderForCustomerScreenState
                   } else {
                     imageWidget = _buildFallbackAvatar(product['name']);
                   }
-
                   return Container(
                     margin: const EdgeInsets.symmetric(vertical: 6),
                     padding: const EdgeInsets.all(10),
@@ -424,67 +437,97 @@ class _CreateOrderForCustomerScreenState
                     style: const TextStyle(
                         fontSize: 16, fontWeight: FontWeight.w500),
                   ),
-                  // --- Đơn vị giao hàng và phí ---
-                  Container(
-                    width: double.infinity,
-                    color: Colors.white,
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Row(
-                              children: const [
-                                Icon(Icons.local_shipping, color: Colors.green),
-                                SizedBox(width: 6),
-                                Text(
-                                  'Đơn vị giao hàng và phí',
-                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                                ),
-                              ],
-                            ),
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: Colors.blue),
-                              onPressed: () async {
-                                final result = await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => SettingShippingCompanyForOrderScreen(totalPrice: totalPrice,totalWeight: totalWeight, initialData: temporaryShippingInfo,),
-                                  ),
-                                );
-                                if (result != null && mounted) {
-                                  setState(() {
-                                    selectedShippingPartner = result['partnerName'];
-                                    codAmount = result['codAmount'];
-                                    shippingNote = result['note'];
-                                    temporaryShippingInfo = result;
-                                    totalWeight = result['weight'] ?? totalWeight;
-                                  });
-                                }
-                              },
 
+
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            // --- Đơn vị giao hàng và phí ---
+            Container(
+              width: double.infinity,
+              color: Colors.white,
+              padding: const EdgeInsets.all(12),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: const [
+                          Icon(Icons.local_shipping, color: Colors.green),
+                          SizedBox(width: 6),
+                          Text(
+                            'Đơn vị giao hàng và phí',
+                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        icon: Icon(
+                          Icons.edit,
+                          color: selectedProducts.isEmpty ? Colors.grey : Colors.blue,
+                        ),
+                        onPressed: selectedProducts.isEmpty
+                            ? () {
+                          message.showSnackbarfalse(context, "Vui lòng chọn sản phẩm trước!");
+                        }
+                            : () {
+                          // ✅ Kiểm tra địa chỉ giao hàng trước
+                          final address = temporaryShippingAddress?['address'] ?? "";
+                          if (address.isEmpty || address == "Chưa có địa chỉ") {
+                            message.showSnackbarfalse(context, "Hãy chọn địa chỉ người nhận!");
+                            return;
+                          }
+
+                          // ✅ Nếu có địa chỉ thì mới cho chọn đơn vị giao hàng
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => SettingShippingCompanyForOrderScreen(
+                                totalPrice: totalPrice,
+                                totalWeight: totalWeight,
+                                initialData: temporaryShippingInfo,
+                                receiverAddress: temporaryShippingAddress?['address'],
+                              ),
                             ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Đối tác: ${selectedShippingPartner ?? "Chưa chọn"}',
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Tiền thu hộ: ${message.formatCurrency(codAmount ?? totalPrice)}',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                        ),
-                      ],
-                    ),
+                          ).then((result) {
+                            if (result != null && mounted) {
+                              setState(() {
+                                selectedShippingPartner = result['partnerName'];
+                                codAmount = result['codAmount'];
+                                shippingNote = result['note'];
+                                temporaryShippingInfo = result;
+                                totalWeight = result['weight'] ?? totalWeight;
+                                temporaryShippingInfo?['shippingFee'] =
+                                    result['shippingFee'] ?? 0;
+                                temporaryShippingInfo?['prePaid'] =
+                                    result['prePaid'] ?? 0;
+                                temporaryShippingInfo?['partnerShippingFee'] =
+                                    result['partnerShippingFee'] ?? 0;
+                              });
+                            }
+                          });
+                        },
+                      ),
+
+
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Đối tác: ${selectedShippingPartner ?? "Chưa chọn"}',
+                    style: const TextStyle(fontSize: 16),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Tiền thu hộ: ${message.formatCurrency(codAmount ?? totalPrice)}',
+                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
                   ),
                 ],
               ),
             ),
-
             const SizedBox(height: 12),
             // --- Địa chỉ giao hàng ---
             Container(
@@ -534,16 +577,17 @@ class _CreateOrderForCustomerScreenState
                               temporaryShippingAddress =
                                   updatedAddress;
                             });
+                            print('update address: $updatedAddress');
                           }
                         },
                       ),
                     ],
                   ),
                   const SizedBox(height: 8),
-                  Text(
-                    '${temporaryShippingAddress?['name'] ?? name}|${temporaryShippingAddress?['phone'] ?? phone}',
-                    style: const TextStyle(fontSize: 16),
-                  ),
+                  // Text(
+                  //   '${temporaryShippingAddress?['name'] ?? name}|${temporaryShippingAddress?['phone'] ?? phone}',
+                  //   style: const TextStyle(fontSize: 16),
+                  // ),
                   Text(
                     '${temporaryShippingAddress?['address'] ?? address}',
                     style: const TextStyle(fontSize: 16),
@@ -595,38 +639,73 @@ class _CreateOrderForCustomerScreenState
         child: Padding(
           padding: const EdgeInsets.all(12.0),
           child: ElevatedButton.icon(
-            icon: const Icon(Icons.check),
-            label: const Text("Tạo đơn"),
+            icon: isLoading
+                ? const SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: Colors.white,
+              ),
+            )
+                : const Icon(Icons.check),
+            label: Text(isLoading ? "Đang tạo đơn..." : "Tạo đơn"),
             style: ElevatedButton.styleFrom(
               minimumSize: const Size.fromHeight(50),
               backgroundColor: Colors.green,
             ),
-            onPressed: () async {
+            onPressed: isLoading
+                ? null
+                : () async {
               try {
-                final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+                setState(() => isLoading = true);
+
+                final currentUserId =
+                    FirebaseAuth.instance.currentUser?.uid;
 
                 if (currentUserId == null) {
-                  message.showSnackbarfalse(context, "Bạn chưa đăng nhập!");
+                  message.showSnackbarfalse(
+                      context, "Bạn chưa đăng nhập!");
                   return;
                 }
 
-                await CustomerOrderServiceLive().createJTOrder(
-                  context: context,
-                  userId: currentUserId, // uid user đăng nhập
-                  shippingPartner: selectedShippingPartner,
-                  customerData: customerData,
-                  products: selectedProducts,
-                  totalPrice: totalPrice,
-                  totalQuantity: totalQuantity,
-                  totalWeight: totalWeight,
-                  codAmount: codAmount ?? totalPrice,
-                  remark: shippingNote ?? "",
-                );
-                message.showSnackbartrue(context, "Tạo đơn thành công!");
+                if (selectedShippingPartner == null) {
+                  message.showSnackbarfalse(
+                      context, "Vui lòng chọn đơn vị giao hàng!");
+                  return;
+                }
+
+                // ✅ Chỉ gọi API khi là J&T
+                if (selectedShippingPartner == "J&T") {
+                  await CustomerOrderServiceLive().createJTOrder(
+                    context: context,
+                    userId: currentUserId,
+                    shippingPartner: selectedShippingPartner,
+                    customerData: customerData,
+                    temporaryShippingAddress: temporaryShippingAddress,
+                    products: selectedProducts,
+                    totalPrice: totalPrice,
+                    totalQuantity: totalQuantity,
+                    totalWeight: totalWeight,
+                    codAmount: codAmount ?? totalPrice,
+                    remark: shippingNote ?? "",
+                    shippingFee: temporaryShippingInfo?['shippingFee'] ?? 0,
+                    prePaid: temporaryShippingInfo?['prePaid'] ?? 0,
+                    partnerShippingFee: temporaryShippingInfo?['partnerShippingFee'] ?? 0,
+                  );
+                  message.showSnackbartrue(context, "Tạo đơn thành công!");
+                } else {
+                  message.showSnackbarfalse(
+                      context, "Chỉ hỗ trợ tạo đơn với đối tác J&T!");
+                }
               } catch (e) {
-                message.showSnackbarfalse(context, "Lỗi tạo đơn: $e");
+                message.showSnackbarfalse(
+                    context, "Lỗi tạo đơn: $e");
+              } finally {
+                if (mounted) setState(() => isLoading = false);
               }
             },
+
           ),
         ),
       ),

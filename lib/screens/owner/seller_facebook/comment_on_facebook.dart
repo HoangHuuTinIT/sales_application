@@ -224,6 +224,7 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
                                           final userId = comment['from']?['id'];
                                           final name = comment['from']?['name'];
                                           final avatarUrl = comment['from']?['picture']?['data']?['url'];
+
                                           if (userId != null && name != null) {
                                             setState(() => isCreating = true);
                                             final facebookService = FacebookLiveService();

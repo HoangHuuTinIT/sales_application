@@ -5,6 +5,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:vietnam_provinces/vietnam_provinces.dart';
 
@@ -343,12 +344,16 @@ class CustomerOrderServiceLive {
     required String userId,
     required String? shippingPartner,
     required Map<String, dynamic> customerData,
+    required Map<String, dynamic>? temporaryShippingAddress,
     required List<Map<String, dynamic>> products,
     required double totalPrice,
     required int totalQuantity,
     required double totalWeight,
     required double codAmount,
     required String remark,
+    double shippingFee = 0,   // 👈 thêm
+    double prePaid = 0,       // 👈 thêm
+    double partnerShippingFee = 0,
   }) async {
     if (shippingPartner != "J&T") {
       throw "Chỉ hỗ trợ J&T hiện tại";
@@ -377,15 +382,22 @@ class CustomerOrderServiceLive {
     final rawPass = utf8.encode("$key" "jadada369t3");
     final md5Pass = md5.convert(rawPass).toString().toUpperCase();
 
-    // Parse địa chỉ khách hàng
-    Map<String, String> recvAddr = parseAddressString(customerData["address"]);
-    print("địa chỉ khách hàng :${customerData["address"]}");
-    print(recvAddr);
+    // --- Ưu tiên dùng địa chỉ giao hàng tạm nếu có ---
+    final receiverData = temporaryShippingAddress ?? customerData;
+
+    // Parse địa chỉ người nhận
+    Map<String, String> recvAddr = parseAddressString(receiverData["address"]);
+
     // Sinh txlogisticId
     final now = DateTime.now();
     final rand = _randomString(4);
-    final txlogisticId =
-        "ODR-${_formatDate(now)}-${_formatTime(now)}-$rand";
+    final txlogisticId = "ODR-${_formatDate(now)}-${_formatTime(now)}-$rand";
+
+    // Debug log
+    print("Người gửi: ${jt["name"]}, ${jt["mobile"]}, "
+        "${jt["prov"]}-${jt["city"]}-${jt["area"]}, ${jt["address"]}");
+    print("Người nhận: ${receiverData["name"]}, ${receiverData["phone"]}, "
+        "${recvAddr["prov"]}-${recvAddr["city"]}-${recvAddr["area"]}, ${recvAddr["address"]}");
 
     // BizContent
     final bizContent = {
@@ -394,6 +406,7 @@ class CustomerOrderServiceLive {
       "password": md5Pass,
       "orderType": jt["orderType"],
       "serviceType": jt["serviceType"],
+
       "sender": {
         "name": jt["name"],
         "mobile": jt["mobile"],
@@ -403,8 +416,8 @@ class CustomerOrderServiceLive {
         "address": jt["address"],
       },
       "receiver": {
-        "name": customerData["name"],
-        "mobile": customerData["phone"],
+        "name": receiverData["name"],
+        "mobile": receiverData["phone"],
         "prov": recvAddr["prov"],
         "city": recvAddr["city"],
         "area": recvAddr["area"],
@@ -424,10 +437,10 @@ class CustomerOrderServiceLive {
     };
 
     final bizContentStr = jsonEncode(bizContent);
-
+print('bizconten ne: $bizContentStr');
     // Digest
-    const privateKey = "6e93e0d4344e47f0a4af7e4e75af955e";
-    final digestSrc = utf8.encode(bizContentStr + privateKey);
+    var privateKey = dotenv.env['PRIVATE_KEY'];
+    final digestSrc = utf8.encode(bizContentStr + privateKey!);
     final md5Digest = md5.convert(digestSrc).bytes;
     final digest = base64Encode(md5Digest);
 
@@ -447,13 +460,50 @@ class CustomerOrderServiceLive {
       },
       body: {"bizContent": bizContentStr},
     );
+
     print("trường apiAccount: ${jt["apiAccount"]}");
     print("thông số jt:$jt");
+
     if (res.statusCode != 200) {
       throw "API lỗi: ${res.body}";
     }
     final respData = jsonDecode(res.body);
     print("J&T Response: $respData");
+    final billCode = respData["data"]?["billCode"];
+    if (billCode == null || billCode.toString().isEmpty) {
+      throw "Không lấy được mã vận đơn từ J&T";
+    }
+    // Lấy thông tin user
+    final userData = userDoc.data();
+    final createdByName = userData?["name"]; // 👈 lấy tên người tạo
+    if (shopId == null) throw "Người dùng chưa có shopid";
+
+    await _firestore.collection("Order").add({
+      "billCode": billCode, // mã vận đơn
+      "txlogisticId": txlogisticId, // mã đơn hàng
+      "invoiceDate": DateTime.now(), // ngày hóa đơn
+      "customerName": customerData["name"] ?? "",
+      "customerPhone": customerData["phone"] ?? "",
+      "shippingNote": remark,
+      "shippingAddress": (temporaryShippingAddress != null)
+          ? temporaryShippingAddress["address"]
+          : customerData["address"],
+      "shippingPartner": shippingPartner,
+      "productType": jt["productType"], // dịch vụ
+      "isInsured": jt["isInsured"], // khai giá hàng hóa
+      "totalWeight": totalWeight,
+      "shippingFee": shippingFee,
+      "codAmount": codAmount,
+      "createdAt": FieldValue.serverTimestamp(),
+      "createdBy": createdByName ?? "Không rõ",
+      "totalAmount":totalPrice ,
+      "shopid":shopId,
+      "customerCode":jt["customerCode"],
+      "key" :jt["key"],
+      "customerId": customerData['id'],
+      "fbid": customerData['fbid']??null,
+      "partnerShippingFee": partnerShippingFee,
+    });
   }
 
   // Helpers
@@ -478,5 +528,99 @@ class CustomerOrderServiceLive {
       "${dt.year}${dt.month.toString().padLeft(2, '0')}${dt.day.toString().padLeft(2, '0')}";
   String _formatTime(DateTime dt) =>
       "${dt.hour.toString().padLeft(2, '0')}${dt.minute.toString().padLeft(2, '0')}${dt.second.toString().padLeft(2, '0')}";
+
+  static Future<Map<String, dynamic>?> checkJTShippingFee({
+    required BuildContext context,
+    required double weight,
+    required String? receiverAddress,
+    required Map<String, dynamic>? partnerInfo,
+    required double? codMoney,
+    required double? goodsValue
+  }) async {
+    try {
+      if (receiverAddress == null || partnerInfo == null) return null;
+
+      // --- Tách địa chỉ nhận ---
+      // Ví dụ: "thôn nà ní - Xã Ninh Quới-291HHD04 - Huyện Hồng Dân - Bạc Liêu"
+      final parts = receiverAddress.split(" - ");
+      if (parts.length < 3) return null;
+
+      final receiverArea = parts[1];  // Xã Ninh Quới-291HHD04
+      final receiverCity = parts[2];  // Huyện Hồng Dân
+      final receiverProv = parts.last; // Bạc Liêu
+
+      // --- Lấy dữ liệu từ JT_setting (ở partnerInfo) ---
+      final customerCode = partnerInfo['customerCode'];
+      final key = partnerInfo['key'];
+      final goodsType = partnerInfo['goodsType'];
+      final productType = partnerInfo['productType'];
+      final senderProv = partnerInfo['prov'];
+      final senderCity = partnerInfo['city'];
+      final senderArea = partnerInfo['area'];
+
+      // --- Password ---
+      final rawPass = "$key" "jadada369t3";
+      final passMd5 = md5.convert(utf8.encode(rawPass)).toString().toUpperCase();
+
+      // --- BizContent ---
+      final bizContent = {
+        "customerCode": customerCode,
+        "password": passMd5,
+        "weight": weight,
+        "productType": productType,
+        "goodsType": goodsType,
+        "goodsValue":goodsValue,
+        "codMoney":codMoney,
+        "sender": {
+          "prov": senderProv,
+          "city": senderCity,
+          "area": senderArea,
+        },
+        "receiver": {
+          "prov": receiverProv,
+          "city": receiverCity,
+          "area": receiverArea,
+        }
+      };
+
+      final bizJson = json.encode(bizContent);
+
+      // --- Digest ---
+      final privateKey = dotenv.env['PRIVATE_KEY'] ?? "";
+      final digestStr = bizJson + privateKey;
+      final digestMd5 = md5.convert(utf8.encode(digestStr));
+      final digestBase64 = base64.encode(digestMd5.bytes);
+
+      // --- Headers ---
+      final headers = {
+        "digest": digestBase64,
+        "timestamp": DateTime.now().millisecondsSinceEpoch.toString(),
+        "apiAccount": dotenv.env['API_ACCOUNT'] ?? "",
+      };
+
+      final url = "https://demoopenapi.jtexpress.vn/webopenplatformapi/api/spmComCost/getComCost";
+      final response = await http.post(
+        Uri.parse(url),
+        headers: headers,
+        body: {"bizContent": bizJson},
+      );
+
+      if (response.statusCode == 200) {
+        final body = json.decode(response.body);
+        print("Json body ne:$body");
+        final data = body['data'];
+        if (data != null) {
+          final standardTotalFee = (data['standardTotalFee'] ?? 0).toDouble();
+          return {
+            "standardTotalFee":standardTotalFee,
+          };
+        }
+      }
+      return null;
+    } catch (e) {
+      debugPrint("checkJTShippingFee error: $e");
+      return null;
+    }
+  }
 }
 
