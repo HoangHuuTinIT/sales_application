@@ -503,6 +503,7 @@ print('bizconten ne: $bizContentStr');
       "customerId": customerData['id'],
       "fbid": customerData['fbid']??null,
       "partnerShippingFee": partnerShippingFee,
+      "status": "Đặt hàng"
     });
   }
 

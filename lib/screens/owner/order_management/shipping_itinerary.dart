@@ -65,7 +65,7 @@ class ShippingItineraryScreen extends StatelessWidget {
               itemBuilder: (context, index) {
                 final d = details[index];
                 final isLatest = index == 0;
-
+                print("thong tin van chuyen ve:${d["desc"]}");
                 return Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -112,9 +112,12 @@ class ShippingItineraryScreen extends StatelessWidget {
                                   color: isLatest ? Colors.green : Colors.black87,
                                 ),
                               ),
+
                               const SizedBox(height: 4),
                               Text("⏰ ${d["scanTime"] ?? ""}",
                                   style: const TextStyle(color: Colors.grey)),
+                              Text("Người phụ trách: ${d["staffName"] ?? "Chưa có"}",style: TextStyle(fontWeight: FontWeight.bold),),
+                              Text("SDT: ${d["staffContact"] ?? "Chưa có"}",style: TextStyle(fontWeight: FontWeight.bold)),
                               const SizedBox(height: 8),
                               Text("🔖 ${d["scanTypeName"] ?? ""}"),
                               if (d["scanNetworkName"] != null)

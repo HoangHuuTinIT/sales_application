@@ -77,14 +77,29 @@ exports.createPaymentIntent = onRequest(async (req, res) => {
 );
 
 // 📦 Webhook J&T
-
 const querystring = require("querystring");
+
+// Bảng quy đổi scanTypeCode -> status tiếng Việt
+const scanTypeMap = {
+  103: "Đặt hàng",
+  104: "Lấy hàng thất bại",
+  105: "Hủy đơn",
+  106: "Đã nhận hàng",
+  109: "Hàng rời kho",
+  110: "Hàng đến kho",
+  112: "Đang giao hàng",
+  113: "Đã thanh toán",
+  116: "Đang chuyển hoàn",
+  117: "Đã chuyển hoàn",
+  118: "Lỗi giao hàng",
+  120: "Lỗi hoàn hàng",
+};
 
 exports.jtWebhook = onRequest(async (req, res) => {
   try {
     const db = getFirestore();
 
-    // Parse x-www-form-urlencoded
+    // Parse body (x-www-form-urlencoded)
     const parsedBody = querystring.parse(req.rawBody.toString());
 
     // bizContent là JSON string trong body
@@ -107,12 +122,13 @@ exports.jtWebhook = onRequest(async (req, res) => {
     if (!snapshot.empty) {
       const orderDoc = snapshot.docs[0];
 
-      // Chỉ cập nhật status từ scanTypeName mới nhất
-      const latestStatus = details.length > 0 ? details[details.length - 1].scanTypeName : "Chưa có thông tin";
+      // Lấy scanTypeCode mới nhất
+      const latestCode = details.length > 0 ? details[details.length - 1].scanTypeCode : null;
+      const latestStatus = latestCode && scanTypeMap[latestCode] ? scanTypeMap[latestCode] : "Chưa có thông tin";
 
       await orderDoc.ref.update({ status: latestStatus });
 
-      console.log(`✅ Updated Order ${billCode} status to: ${latestStatus}`);
+      console.log(`✅ Updated Order ${billCode} status to: ${latestStatus} (code: ${latestCode})`);
     } else {
       console.log(`⚠️ Không tìm thấy Order với billCode: ${billCode}`);
     }
