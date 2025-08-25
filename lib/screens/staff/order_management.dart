@@ -1,3 +1,4 @@
+import 'package:ban_hang/screens/owner/create_order/create_order_for_customer.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
@@ -178,7 +179,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                           ],
                         ),
                         trailing: PopupMenuButton<String>(
-                          onSelected: (value) {
+                          onSelected: (value) async {
                             if (value == 'details') {
                               Navigator.pushNamed(
                                 context,
@@ -188,6 +189,20 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                                   'orderData': data,
                                 },
                               );
+                            } else if (value == 'create_order') {
+                              // ✅ Gọi service lấy đủ dữ liệu đơn hàng + user
+                              final customerData = await _orderService.prepareOrderData(doc.id);
+
+                              if (customerData != null && mounted) {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => CreateOrderForCustomerScreen(
+                                      customerData: customerData,
+                                    ),
+                                  ),
+                                );
+                              }
                             }
                           },
                           itemBuilder: (context) => [
@@ -195,11 +210,18 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                               value: 'details',
                               child: Text('Chi tiết đơn hàng'),
                             ),
+                            const PopupMenuItem(
+                              value: 'create_order',
+                              child: Text('Tạo đơn'),
+                            ),
                           ],
                         ),
+
                       ),
                     );
+
                   },
+
                 );
               },
             ),

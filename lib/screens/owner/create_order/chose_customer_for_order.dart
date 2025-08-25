@@ -87,13 +87,27 @@ class _ChoseCustomerForOrderScreenState extends State<ChoseCustomerForOrderScree
                 final address = data['address'] ?? 'Chưa có địa chỉ';
 
                 return InkWell(
-                  onTap: () {
-                    Navigator.push(
+                  onTap: () async {
+                    final result = await Navigator.push(
                       context,
                       MaterialPageRoute(
                         builder: (_) => CreateOrderForCustomerScreen(customerData: data),
                       ),
                     );
+
+                    if (result != null && result is Map<String, dynamic>) {
+                      setState(() {
+                        final index = allCustomers.indexWhere((c) => c['id'] == result['id']);
+                        if (index != -1) {
+                          allCustomers[index] = result;
+                        } else {
+                          allCustomers.add(result);
+                        }
+                        filteredCustomers = allCustomers;
+                      });
+                    } else if (result == true) {
+                      _loadCustomers(); // fallback đọc lại từ Firestore
+                    }
                   },
                   child: Padding(
                     padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),

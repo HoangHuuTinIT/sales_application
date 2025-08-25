@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:ffi';
 import 'dart:typed_data' as typed;
 import 'package:barcode/barcode.dart';
 import 'package:barcode_image/barcode_image.dart';
@@ -125,6 +126,8 @@ class BuyProductsService {
       final String productId = item['productId'];
       String? shopid = (item['shopid'] as String?);
       String? productName = (item['productName'] as String?);
+      num? weight = (item['productWeight'] );
+      num? stockQuantity = (item['productStockQuantity'] );
       num? price = (item['price'] as num?);
 
       if (shopid == null || productName == null || price == null) {
@@ -148,8 +151,12 @@ class BuyProductsService {
         'totalAmount': (item['totalAmount'] != null)
             ? ((item['totalAmount'] as num).toDouble())
             : (price.toDouble() * (item['quantity'] as num).toDouble()),
+        'weight':weight,
+        'stockQuantity' : stockQuantity,
       });
-    }));
+
+    })
+    );
 
     // Nhóm theo shopid
     final Map<String, List<Map<String, dynamic>>> itemsByShop = {};
@@ -199,6 +206,8 @@ class BuyProductsService {
         batch.set(detailRef, {
           'productId': i['productId'],
           'productName': i['productName'],
+          'stockQuantity':i['stockQuantity'],
+          'weight' : i['weight'],
           'price': price.toDouble(),
           'quantity': qty,
           'total': (price.toDouble() * qty),

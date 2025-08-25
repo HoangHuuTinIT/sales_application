@@ -92,29 +92,6 @@ class FacebookLiveService {
     return result;
   }
 
-  Future<void> createUserFromCommentIfNotExists({
-    required String userId,
-    required String name,
-    required String? avatarUrl,
-    required String creatorId,
-  }) async {
-    final usersRef = FirebaseFirestore.instance.collection('users');
-    final doc = await usersRef.doc(userId).get();
-    if (doc.exists) {
-      return; // Đã tồn tại -> không thêm nữa
-    }
-    await usersRef.doc(userId).set({
-      'name': name,
-      'avatarUrl': avatarUrl,
-      'status': 'Bình thường',
-      'creatorId': creatorId,
-      'createdAt': Timestamp.now(),
-      'phone_verified': true,
-      'role': 'customer',
-      'address': null, // thêm trường address null
-      'phone': null,   // thêm trường phone null
-    });
-  }
   Future<void> createCustomerRecordsIfNotExists({
     required String fbid,
     required String name,
@@ -212,53 +189,7 @@ class FacebookLiveService {
 
     return comments;
   }
-  Future<void> createOrderFromComment({
-    required String userId,
-    required String name,
-    required String? avatarUrl,
-    required String time,
-    required String message,
-  }) async {
-    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
-    if (currentUserId == null) throw Exception('Chưa đăng nhập');
-    // 1. Tạo user nếu chưa có
-    await createCustomerRecordsIfNotExists(
-      fbid: userId,
-      name: name,
-      avatarUrl: avatarUrl,
-      creatorId: currentUserId,
-    );
-    // 2. Kiểm tra máy in mặc định
-    final printerService = PrinterService(currentUserId);
-    final defaultPrinter = await printerService.getDefaultPrinter();
 
-    if (defaultPrinter != null) {
-      // Có máy in mặc định -> tiến hành in
-      final host = defaultPrinter['IP'] ?? '192.168.1.100';
-      final port = (defaultPrinter['Port'] is int) ? defaultPrinter['Port'] : 9100;
-
-      try {
-        await printComment(
-          host: host,
-          port: port,
-          userId: userId,
-          name: name,
-          time: time,
-          message: message,
-        );
-      } catch (e) {
-        debugPrint('Lỗi khi in: $e');
-        // Có thể rethrow hoặc báo lỗi tùy logic app
-        throw Exception('Lỗi khi in: $e');
-      }
-    } else {
-      // Không có máy in mặc định -> bỏ qua in, tiếp tục xử lý bình thường
-      debugPrint('Không có máy in mặc định, bỏ qua in');
-    }
-
-    // 3. Tiếp tục các bước tạo đơn khác ở đây (nếu có)
-    // ...
-  }
   Future<void> printComment({
     required String host, // IP máy in
     required int port, // Cổng máy in, thường là 9100
@@ -268,7 +199,7 @@ class FacebookLiveService {
     required String message,
   }) async {
     final profile = await CapabilityProfile.load();
-    final printer = NetworkPrinter(PaperSize.mm80, profile);
+    final printer = NetworkPrinter(PaperSize.mm58, profile);
 
     final PosPrintResult res = await printer.connect(host, port: port);
 
@@ -282,7 +213,6 @@ class FacebookLiveService {
       printer.hr();
       printer.text('HHT',
           styles: PosStyles(align: PosAlign.center, bold: true));
-
       printer.cut();
       printer.disconnect();
     } else {
@@ -291,20 +221,82 @@ class FacebookLiveService {
 
     }
   }
-  Future<Map<String, dynamic>?> getDefaultPrinterForBill() async {
+
+  Future<Map<String, dynamic>?> getPrinterForCurrentShop() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return null;
 
-    final query = await FirebaseFirestore.instance
+    final firestore = FirebaseFirestore.instance;
+
+    // 🔹 Lấy shopid từ bảng users
+    final userDoc = await firestore.collection('users').doc(user.uid).get();
+    final shopId = userDoc.data()?['shopid'];
+    if (shopId == null) {
+      debugPrint("⚠️ User chưa có shopid");
+      return null;
+    }
+
+    // 🔹 Lấy máy in có shopid trùng khớp
+    final query = await firestore
         .collection('printer')
-        .where('id_user_setting_printer', isEqualTo: user.uid)
-        .where('default', isEqualTo: true)
+        .where('shopid', isEqualTo: shopId)
         .limit(1)
         .get();
 
     if (query.docs.isNotEmpty) {
       return query.docs.first.data() as Map<String, dynamic>;
     }
+
+    debugPrint("⚠️ Không tìm thấy máy in cho shopid: $shopId");
     return null;
   }
+
+  Future<String> createOrderFromComment({
+    required String userId,
+    required String name,
+    required String? avatarUrl,
+    required String time,
+    required String message,
+  }) async {
+    final currentUserId = FirebaseAuth.instance.currentUser?.uid;
+    if (currentUserId == null) throw Exception('Chưa đăng nhập');
+
+    // 1. Tạo customer record nếu chưa có
+    await createCustomerRecordsIfNotExists(
+      fbid: userId,
+      name: name,
+      avatarUrl: avatarUrl,
+      creatorId: currentUserId,
+    );
+
+    // 2. Lấy máy in theo shopid
+    final printerConfig = await getPrinterForCurrentShop();
+
+    if (printerConfig != null) {
+      final host = printerConfig['IP'] ?? '192.168.1.100';
+      final port = (printerConfig['Port'] is int) ? printerConfig['Port'] : 9100;
+
+      try {
+        await printComment(
+          host: host,
+          port: port,
+          userId: userId,
+          name: name,
+          time: time,
+          message: message,
+        );
+        return "Tạo đơn thành công"; // ✅ có in thành công
+      } catch (e) {
+        debugPrint('❌ Lỗi khi in: $e');
+        return "Thêm khách thành công, in thất bại. Hãy kiểm tra cài đặt máy in"; // ✅ in lỗi
+      }
+    } else {
+      debugPrint('⚠️ Không tìm thấy máy in cho shop hiện tại, bỏ qua in');
+      return "Thêm khách thành công, bạn có thể in đơn nếu cài đặt máy in trong cài đặt"; // ✅ không có máy in
+    }
+
+    // Sau này bạn có thể bổ sung tạo đơn hàng vào đây nếu cần
+  }
+
+
 }

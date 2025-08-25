@@ -1,6 +1,7 @@
 // lib/screens/owner/create_order_for_customer.dart
 import 'dart:async';
 import 'package:ban_hang/screens/owner/create_order/setting_shipping_company_for_order.dart';
+import 'package:ban_hang/screens/owner/home_owner.dart';
 import 'package:ban_hang/services/owner_services/customer_order_service.dart';
 import 'package:ban_hang/utils/message.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -49,7 +50,10 @@ class _CreateOrderForCustomerScreenState
       'name': customerData['name'] ?? 'Chưa có tên',
       'address': customerData['address'] ?? 'Chưa có địa chỉ',
     };
-
+    if (customerData['products'] != null) {
+      selectedProducts = List<Map<String, dynamic>>.from(customerData['products']);
+      _calculateTotal();
+    }
   }
   Future<void> _getSellerName() async {
     final currentUserId = FirebaseAuth.instance.currentUser!.uid;
@@ -60,7 +64,6 @@ class _CreateOrderForCustomerScreenState
       });
     }
   }
-
 
   void _selectProduct() async {
     final products = await Navigator.pushNamed(context, '/chose_product_for_order');
@@ -83,7 +86,6 @@ class _CreateOrderForCustomerScreenState
           });
         }
       }
-
       setState(() {
         selectedProducts = loadedProducts;
         _calculateTotal();
@@ -96,8 +98,6 @@ class _CreateOrderForCustomerScreenState
       });
     }
   }
-
-
   void _calculateTotal() {
     totalPrice = 0;
     totalQuantity = 0;
@@ -125,48 +125,37 @@ class _CreateOrderForCustomerScreenState
         ? customerData['name']
         : 'Chưa có tên';
     final status = (customerData['status'] as String?) ?? '';
-    final phone =
-    (customerData['phone'] as String?)?.isNotEmpty == true
+    final phone = (customerData['phone'] as String?)?.isNotEmpty == true
         ? customerData['phone']
         : 'Chưa có số điện thoại';
-    final address =
-    (customerData['address'] as String?)?.isNotEmpty == true
+    final address = (customerData['address'] as String?)?.isNotEmpty == true
         ? customerData['address']
         : 'Chưa có địa chỉ';
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('Tạo đơn cho khách hàng'),
-        actions: [
-          PopupMenuButton<String>(
-            onSelected: (value) {
-              if (value == 'edit') {
-                Navigator.push(
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back),
+          onPressed: () {
+            message.showConfirmDialog(
+              context: context,
+              title: "Xác nhận",
+              content: "Bạn có muốn bỏ quá trình tạo đơn không?",
+              confirmText: "Có",
+              cancelText: "Không",
+              onConfirm: () {
+                // chuyển thẳng về HomeOwnerScreen và xóa stack
+                Navigator.pushAndRemoveUntil(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => EditCustomerForOrderScreen(
-                      customerId: customerData['id'],
-                      initialData: customerData,
-                    ),
-                  ),
-                ).then((updatedData) {
-                  if (updatedData != null && updatedData is Map<String, dynamic>) {
-                    setState(() {
-                      customerData = {...customerData, ...updatedData};
-                    });
-                  }
-                });
-              }
+                  MaterialPageRoute(builder: (_) => const HomeOwnerScreen()),
+                      (route) => false,
+                );
+              },
+            );
+          },
+        ),
 
-            },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'edit',
-                child: Text('Chỉnh sửa thông tin khách hàng'),
-              ),
-            ],
-          ),
-        ],
       ),
       body: SingleChildScrollView(
         child: Column(
@@ -193,10 +182,36 @@ class _CreateOrderForCustomerScreenState
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(name,
-                                style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.bold)),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(name,
+                                      style: const TextStyle(
+                                          fontSize: 22,
+                                          fontWeight: FontWeight.bold)),
+                                ),
+                                IconButton(
+                                  icon: const Icon(Icons.edit, color: Colors.blue),
+                                  onPressed: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => EditCustomerForOrderScreen(
+                                          customerId: customerData['id'],
+                                          initialData: customerData,
+                                        ),
+                                      ),
+                                    ).then((updatedData) {
+                                      if (updatedData != null && updatedData is Map<String, dynamic>) {
+                                        setState(() {
+                                          customerData = {...customerData, ...updatedData};
+                                        });
+                                      }
+                                    });
+                                  },
+                                ),
+                              ],
+                            ),
                             const SizedBox(height: 6),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -206,14 +221,14 @@ class _CreateOrderForCustomerScreenState
                                 borderRadius: BorderRadius.circular(8),
                               ),
                               child: Text(status,
-                                  style:
-                                  const TextStyle(color: Colors.white)),
+                                  style: const TextStyle(color: Colors.white)),
                             ),
                           ],
                         ),
                       )
                     ],
                   ),
+
                   const SizedBox(height: 12),
                   Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -668,7 +683,12 @@ class _CreateOrderForCustomerScreenState
                       context, "Bạn chưa đăng nhập!");
                   return;
                 }
-
+                if (customerData['phone'] == null ||
+                    (customerData['phone'] as String).trim().isEmpty ||
+                    customerData['phone'] == "Chưa có số điện thoại") {
+                  message.showSnackbarfalse(context, "Hãy thêm thông tin khách hàng (số điện thoại) trước khi tạo đơn!");
+                  return;
+                }
                 if (selectedShippingPartner == null) {
                   message.showSnackbarfalse(
                       context, "Vui lòng chọn đơn vị giao hàng!");
@@ -694,6 +714,7 @@ class _CreateOrderForCustomerScreenState
                     partnerShippingFee: temporaryShippingInfo?['partnerShippingFee'] ?? 0,
                   );
                   message.showSnackbartrue(context, "Tạo đơn thành công!");
+                  Navigator.pop(context, customerData);
                 } else {
                   message.showSnackbarfalse(
                       context, "Chỉ hỗ trợ tạo đơn với đối tác J&T!");

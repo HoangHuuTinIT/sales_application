@@ -1,4 +1,4 @@
-// lib/screens/owner/setting_printer.dart
+// lib/screens/owner/printer_setting/setting_printer.dart
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -15,22 +15,32 @@ class SettingPrinterScreen extends StatefulWidget {
 
 class _SettingPrinterScreenState extends State<SettingPrinterScreen> {
   final _formKey = GlobalKey<FormState>();
-
   late TextEditingController _nameController;
   late TextEditingController _ipController;
   late TextEditingController _portController;
+  late TextEditingController _noteController;
 
   late PrinterService printerService;
   final user = FirebaseAuth.instance.currentUser!;
 
+  String? shopid;
+
   @override
   void initState() {
     super.initState();
-    printerService = PrinterService(user.uid);
-
-    _nameController = TextEditingController(text: widget.printerDoc?['name_printer'] ?? '');
+    _loadShopId();
+    _nameController = TextEditingController(text: widget.printerDoc?['name'] ?? '');
     _ipController = TextEditingController(text: widget.printerDoc?['IP'] ?? '');
     _portController = TextEditingController(text: (widget.printerDoc?['Port']?.toString()) ?? '9100');
+    _noteController = TextEditingController(text: widget.printerDoc?['note'] ?? '');
+  }
+
+  Future<void> _loadShopId() async {
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    setState(() {
+      shopid = userDoc['shopid']; // shopid (chữ i thường)
+      printerService = PrinterService(shopid!);
+    });
   }
 
   @override
@@ -38,15 +48,17 @@ class _SettingPrinterScreenState extends State<SettingPrinterScreen> {
     _nameController.dispose();
     _ipController.dispose();
     _portController.dispose();
+    _noteController.dispose();
     super.dispose();
   }
 
   void _savePrinter() async {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate() || shopid == null) return;
 
     final name = _nameController.text.trim();
     final ip = _ipController.text.trim();
     final port = int.tryParse(_portController.text.trim()) ?? 9100;
+    final note = _noteController.text.trim();
 
     try {
       if (widget.printerDoc == null) {
@@ -54,6 +66,7 @@ class _SettingPrinterScreenState extends State<SettingPrinterScreen> {
           namePrinter: name,
           ip: ip,
           port: port,
+          note: note,
         );
       } else {
         await printerService.updatePrinter(
@@ -61,6 +74,7 @@ class _SettingPrinterScreenState extends State<SettingPrinterScreen> {
           namePrinter: name,
           ip: ip,
           port: port,
+          note: note,
         );
       }
       if (context.mounted) {
@@ -77,7 +91,7 @@ class _SettingPrinterScreenState extends State<SettingPrinterScreen> {
   Widget build(BuildContext context) {
     final isEditing = widget.printerDoc != null;
     return Scaffold(
-      appBar: AppBar(title: Text(isEditing ? 'Chỉnh sửa máy in' : 'Thêm máy in')),
+      appBar: AppBar(title: Text(isEditing ? 'Chỉnh sửa máy in' : 'Thêm máy in ESC/POS (Wi-Fi)')),
       body: Padding(
         padding: const EdgeInsets.all(16),
         child: Form(
@@ -104,13 +118,18 @@ class _SettingPrinterScreenState extends State<SettingPrinterScreen> {
               TextFormField(
                 controller: _portController,
                 keyboardType: TextInputType.number,
-                decoration: const InputDecoration(labelText: 'Port máy in'),
+                decoration: const InputDecoration(labelText: 'Port máy in (mặc định 9100)'),
                 validator: (v) {
                   if (v == null || v.trim().isEmpty) return 'Vui lòng nhập port';
                   final port = int.tryParse(v.trim());
                   if (port == null || port < 1 || port > 65535) return 'Port không hợp lệ';
                   return null;
                 },
+              ),
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _noteController,
+                decoration: const InputDecoration(labelText: 'Ghi chú (tuỳ chọn)'),
               ),
               const SizedBox(height: 30),
               ElevatedButton(

@@ -63,4 +63,71 @@ class OrderManagementService {
       'updatedAt': FieldValue.serverTimestamp(),
     });
   }
+  Future<Map<String, dynamic>?> prepareOrderData(String orderId) async {
+    try {
+      // Lấy dữ liệu từ OrderedProducts
+      final orderDoc = await _firestore.collection('OrderedProducts').doc(orderId).get();
+      if (!orderDoc.exists) return null;
+      final orderData = orderDoc.data()!;
+
+      final userId = orderData['userId'];
+      if (userId == null) return null;
+
+      // 🔹 Lấy thông tin user
+      final userDoc = await _firestore.collection('users').doc(userId).get();
+      final userData = userDoc.exists ? userDoc.data()! : {};
+
+      // 🔹 Lấy danh sách OrderDetails
+      final detailsSnapshot = await _firestore
+          .collection('OrderedProducts')
+          .doc(orderId)
+          .collection('OrderDetails')
+          .get();
+
+      final products = <Map<String, dynamic>>[];
+
+      for (final d in detailsSnapshot.docs) {
+        final p = d.data();
+
+        // 🔹 Lấy thêm thông tin gốc từ Products
+        final productDoc =
+        await _firestore.collection('Products').doc(p['productId']).get();
+        final productData = productDoc.data() ?? {};
+
+        products.add({
+          'name': p['productName'],
+          'price': (p['price'] ?? 0).toDouble(),
+          'quantity': p['quantity'] ?? 0,
+          'stockQuantity': productData['stockQuantity'] ?? 0, // ✅ từ Products
+          'weight': (productData['weight'] ?? 0).toDouble(), // ✅ từ Products
+          'total': (p['total'] ?? 0).toDouble(),
+          'imageUrls': productData['imageUrls'] ?? [], // ✅ ảnh sản phẩm
+        });
+      }
+
+      // 🔹 Tính tổng
+      final totalQuantity = products.fold<int>(0, (sum, p) => sum + (p['quantity'] as int));
+      final totalWeight = products.fold<double>(0, (sum, p) => sum + (p['weight'] as double));
+      final totalPrice = products.fold<double>(0, (sum, p) => sum + (p['total'] as double));
+
+      // ✅ Gom dữ liệu thành customerData để truyền sang màn hình tạo đơn
+      return {
+        'id': userId,
+        'name': userData['name'] ?? 'Chưa có tên',
+        'phone': userData['phone'] ?? 'Chưa có số điện thoại',
+        'address': userData['address'] ?? 'Chưa có địa chỉ',
+        'avatarUrl': userData['avatarUrl'],
+        'status': userData['status'] ?? 'Bình thường',
+        'products': products,
+        'totalQuantity': totalQuantity,
+        'totalWeight': totalWeight,
+        'totalPrice': totalPrice,
+      };
+    } catch (e) {
+      print('❌ Lỗi prepareOrderData: $e');
+      return null;
+    }
+  }
+
+
 }

@@ -786,6 +786,8 @@ class _ProductCustomerChoseScreenState extends State<ProductCustomerChoseScreen>
                                         'quantity': quantity,
                                         'price': finalPrice,
                                         'totalAmount': totalPrice,
+                                        'productWeight' : product!['weight'],
+                                        'productStockQuantity': product!['stockQuantity'],
                                       }
                                     ],
                                   ),

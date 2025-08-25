@@ -181,10 +181,20 @@ class _EditCustomerForOrderScreenState
                   controller: _nameController,
                   decoration: _dropdownDecoration('Tên')),
               const SizedBox(height: 12),
-              TextField(
-                  controller: _phoneController,
-                  keyboardType: TextInputType.phone,
-                  decoration: _dropdownDecoration('Điện thoại')),
+              TextFormField(
+                controller: _phoneController,
+                keyboardType: TextInputType.phone,
+                decoration: _dropdownDecoration('Điện thoại'),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Vui lòng nhập số điện thoại';
+                  }
+                  if (value.length < 9) {
+                    return 'Số điện thoại không hợp lệ';
+                  }
+                  return null;
+                },
+              ),
               const SizedBox(height: 12),
               TextField(
                   controller: _facebookController,
@@ -293,15 +303,20 @@ class _EditCustomerForOrderScreenState
               const SizedBox(height: 12),
 
               // Địa chỉ chi tiết
-              TextField(
+              TextFormField(
                 controller: _addressDetailController,
                 decoration: const InputDecoration(
                   labelText: 'Địa chỉ chi tiết',
                   hintText: 'Ví dụ: Số nhà, tên đường...',
                   border: OutlineInputBorder(),
-                  contentPadding:
-                  EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
+                validator: (value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Vui lòng nhập địa chỉ chi tiết';
+                  }
+                  return null;
+                },
               ),
               const SizedBox(height: 24),
 

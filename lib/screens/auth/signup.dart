@@ -1,6 +1,7 @@
 import 'package:ban_hang/screens/customer/verify_phone_number.dart';
+import 'package:ban_hang/services/utilities/utilities_address.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:flutter/material.dart';
-import 'package:vietnam_provinces/vietnam_provinces.dart';
 import 'package:ban_hang/services/auth_services/auth_service.dart';
 
 class SignUpScreen extends StatefulWidget {
@@ -14,16 +15,17 @@ enum SignUpType { owner, customer }
 
 class _SignUpScreenState extends State<SignUpScreen> {
   SignUpType _selectedType = SignUpType.owner;
-  Province? _selectedProvinceCustomer;
-  District? _selectedDistrictCustomer;
-  Ward? _selectedWardCustomer;
-
+  String? _selectedProvinceCustomer;
+  String? _selectedDistrictCustomer;
+  String? _selectedWardCustomer;
   final _formKeyCustomer = GlobalKey<FormState>();
   final _nameControllerCustomer = TextEditingController();
   final _emailControllerCustomer = TextEditingController();
   final _passwordControllerCustomer = TextEditingController();
   final _detailAddressControllerCustomer = TextEditingController();
-
+  String? _selectedProvinceOwner;
+  String? _selectedDistrictOwner;
+  String? _selectedWardOwner;
   // Controller form bán hàng
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
@@ -31,58 +33,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _passwordController = TextEditingController();
   final _detailAddressController = TextEditingController();
 
-  // Địa chỉ tỉnh, huyện, xã chọn
-  Province? _selectedProvince;
-  District? _selectedDistrict;
-  Ward? _selectedWard;
-  List<Province> _provinces = [];
+
+
   @override
   void initState() {
     super.initState();
-    AuthService().initLocations(); // Khởi tạo vietnam_provinces
-    _provinces = AuthService().getProvinces();
+    AddressUtils.loadAddressJson();
   }
 
-  void _onProvinceChangedCustomer(Province? p) {
-    setState(() {
-      _selectedProvinceCustomer = p;
-      _selectedDistrictCustomer = null;
-      _selectedWardCustomer = null;
-    });
-  }
 
-  void _onDistrictChangedCustomer(District? d) {
-    setState(() {
-      _selectedDistrictCustomer = d;
-      _selectedWardCustomer = null;
-    });
-  }
-
-  void _onWardChangedCustomer(Ward? w) {
-    setState(() {
-      _selectedWardCustomer = w;
-    });
-  }
-  void _onProvinceChanged(Province? p) {
-    setState(() {
-      _selectedProvince = p;
-      _selectedDistrict = null;
-      _selectedWard = null;
-    });
-  }
-
-  void _onDistrictChanged(District? d) {
-    setState(() {
-      _selectedDistrict = d;
-      _selectedWard = null;
-    });
-  }
-
-  void _onWardChanged(Ward? w) {
-    setState(() {
-      _selectedWard = w;
-    });
-  }
 
   Future<void> _handleConfirmCustomer() async {
     if (!_formKeyCustomer.currentState!.validate()) return;
@@ -109,8 +68,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
     if (verifiedPhone == null) return;
 
-    final address =
-        '$detailAddress - ${_selectedWardCustomer!.name} - ${_selectedDistrictCustomer!.name} - ${_selectedProvinceCustomer!.name}';
+    final address = AddressUtils.buildFullAddress(
+      addressDetail: detailAddress,
+      ward: _selectedWardCustomer!,
+      district: _selectedDistrictCustomer!,
+      province: _selectedProvinceCustomer!,
+    );
 
     final error = await AuthService().CreateCustomerAccount(
       name: name,
@@ -131,7 +94,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
   Future<void> _handleConfirmOwner() async {
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedProvince == null || _selectedDistrict == null || _selectedWard == null) {
+    if (_selectedProvinceOwner == null || _selectedDistrictOwner == null || _selectedWardOwner == null) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Vui lòng chọn đầy đủ địa chỉ')));
       return;
     }
@@ -143,8 +106,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final detailAddress = _detailAddressController.text.trim();
 
     // Địa chỉ lưu lên Firestore dạng "địa chỉ chi tiết - Xã - Huyện - Tỉnh"
-    final address =
-        '$detailAddress - ${_selectedWard!.name} - ${_selectedDistrict!.name} - ${_selectedProvince!.name}';
+    final address = AddressUtils.buildFullAddress(
+      addressDetail: detailAddress,
+      ward: _selectedWardCustomer!,
+      district: _selectedDistrictCustomer!,
+      province: _selectedProvinceCustomer!,
+    );
 
     // Chuyển sang màn VerifyPhoneNumber, đợi xác minh xong mới lưu Firestore
     final phoneNumber = await Navigator.push<String?>(
@@ -181,7 +148,6 @@ class _SignUpScreenState extends State<SignUpScreen> {
     await AuthService().signUpWithFacebookAndCheck(context);
   }
 
-  @override
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -238,47 +204,59 @@ class _SignUpScreenState extends State<SignUpScreen> {
             ),
 
             // Tỉnh/Thành phố
-            DropdownButtonFormField<Province>(
-              value: _selectedProvinceCustomer,
-              hint: const Text('Chọn Tỉnh/Thành phố'),
-              items: AuthService()
-                  .getProvinces()
-                  .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
-                  .toList(),
-              onChanged: _onProvinceChangedCustomer,
-              validator: (v) => v == null ? 'Vui lòng chọn tỉnh' : null,
+            DropdownSearch<String>(
+              items: AddressUtils.getProvinces(),
+              selectedItem: _selectedProvinceCustomer,
+              dropdownDecoratorProps: DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(labelText: "Chọn Tỉnh/Thành phố"),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _selectedProvinceCustomer = value;
+                  _selectedDistrictCustomer = null;
+                  _selectedWardCustomer = null;
+                });
+              },
+              validator: (v) => v == null ? "Vui lòng chọn tỉnh" : null,
             ),
 
             const SizedBox(height: 12),
 
-            // Huyện/Quận
-            DropdownButtonFormField<District>(
-              value: _selectedDistrictCustomer,
-              hint: const Text('Chọn Huyện/Quận'),
+// Quận/Huyện
+            DropdownSearch<String>(
               items: _selectedProvinceCustomer == null
                   ? []
-                  : AuthService()
-                  .getDistricts(_selectedProvinceCustomer!.code)
-                  .map((d) => DropdownMenuItem(value: d, child: Text(d.name)))
-                  .toList(),
-              onChanged: _onDistrictChangedCustomer,
-              validator: (v) => v == null ? 'Vui lòng chọn huyện' : null,
+                  : AddressUtils.getDistricts(_selectedProvinceCustomer!),
+              selectedItem: _selectedDistrictCustomer,
+              dropdownDecoratorProps: DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(labelText: "Chọn Quận/Huyện"),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _selectedDistrictCustomer = value;
+                  _selectedWardCustomer = null;
+                });
+              },
+              validator: (v) => v == null ? "Vui lòng chọn huyện" : null,
             ),
 
             const SizedBox(height: 12),
 
-            // Xã/Phường
-            DropdownButtonFormField<Ward>(
-              value: _selectedWardCustomer,
-              hint: const Text('Chọn Xã/Phường'),
+// Phường/Xã
+            DropdownSearch<String>(
               items: (_selectedProvinceCustomer == null || _selectedDistrictCustomer == null)
                   ? []
-                  : AuthService()
-                  .getWards(_selectedProvinceCustomer!.code, _selectedDistrictCustomer!.code)
-                  .map((w) => DropdownMenuItem(value: w, child: Text(w.name)))
-                  .toList(),
-              onChanged: _onWardChangedCustomer,
-              validator: (v) => v == null ? 'Vui lòng chọn xã' : null,
+                  : AddressUtils.getWards(_selectedProvinceCustomer!, _selectedDistrictCustomer!),
+              selectedItem: _selectedWardCustomer,
+              dropdownDecoratorProps: DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(labelText: "Chọn Xã/Phường"),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _selectedWardCustomer = value;
+                });
+              },
+              validator: (v) => v == null ? "Vui lòng chọn xã" : null,
             ),
 
             // Địa chỉ chi tiết
@@ -377,48 +355,60 @@ class _SignUpScreenState extends State<SignUpScreen> {
               validator: (v) => v == null || v.length < 6 ? 'Mật khẩu phải ít nhất 6 ký tự' : null,
             ),
 
-            // Địa chỉ chọn tỉnh
-            DropdownButtonFormField<Province>(
-              value: _selectedProvince,
-              hint: const Text('Chọn Tỉnh/Thành phố'),
-              items: _provinces
-                  .map((p) => DropdownMenuItem(value: p, child: Text(p.name)))
-                  .toList(),
-              onChanged: _onProvinceChanged,
-              validator: (v) => v == null ? 'Vui lòng chọn tỉnh' : null,
+            // Tỉnh/Thành phố
+            DropdownSearch<String>(
+              items: AddressUtils.getProvinces(),
+              selectedItem: _selectedProvinceOwner,
+              dropdownDecoratorProps: DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(labelText: "Chọn Tỉnh/Thành phố"),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _selectedProvinceOwner = value;
+                  _selectedDistrictOwner = null;
+                  _selectedWardOwner = null;
+                });
+              },
+              validator: (v) => v == null ? "Vui lòng chọn tỉnh" : null,
             ),
 
+            const SizedBox(height: 12),
 
-            // Huyện
-            DropdownButtonFormField<District>(
-              value: _selectedDistrict,
-              hint: const Text('Chọn Huyện/Quận'),
-              items: _selectedProvince == null
+// Quận/Huyện
+            DropdownSearch<String>(
+              items: _selectedProvinceOwner == null
                   ? []
-                  : AuthService()
-                  .getDistricts(_selectedProvince!.code)
-                  .map(
-                    (d) => DropdownMenuItem(value: d, child: Text(d.name)),
-              )
-                  .toList(),
-              onChanged: _onDistrictChanged,
-              validator: (v) => v == null ? 'Vui lòng chọn huyện' : null,
+                  : AddressUtils.getDistricts(_selectedProvinceOwner!),
+              selectedItem: _selectedDistrictOwner,
+              dropdownDecoratorProps: DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(labelText: "Chọn Quận/Huyện"),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _selectedDistrictOwner = value;
+                  _selectedWardOwner = null;
+                });
+              },
+              validator: (v) => v == null ? "Vui lòng chọn huyện" : null,
             ),
 
-            // Xã
-            DropdownButtonFormField<Ward>(
-              value: _selectedWard,
-              hint: const Text('Chọn Xã/Phường'),
-              items: (_selectedProvince == null || _selectedDistrict == null)
+            const SizedBox(height: 12),
+
+// Phường/Xã
+            DropdownSearch<String>(
+              items: (_selectedProvinceOwner == null || _selectedDistrictOwner == null)
                   ? []
-                  : AuthService()
-                  .getWards(_selectedProvince!.code, _selectedDistrict!.code)
-                  .map(
-                    (w) => DropdownMenuItem(value: w, child: Text(w.name)),
-              )
-                  .toList(),
-              onChanged: _onWardChanged,
-              validator: (v) => v == null ? 'Vui lòng chọn xã' : null,
+                  : AddressUtils.getWards(_selectedProvinceOwner!, _selectedDistrictOwner!),
+              selectedItem: _selectedWardOwner,
+              dropdownDecoratorProps: DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(labelText: "Chọn Xã/Phường"),
+              ),
+              onChanged: (value) {
+                setState(() {
+                  _selectedWardOwner = value;
+                });
+              },
+              validator: (v) => v == null ? "Vui lòng chọn xã" : null,
             ),
 
             // Địa chỉ chi tiết

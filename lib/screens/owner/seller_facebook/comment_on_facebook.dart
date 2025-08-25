@@ -22,7 +22,7 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
   String? livestreamId;
   String? accessToken;
   String searchKeyword = '';
-  Timer? autoRefreshTimer;
+  // Timer? autoRefreshTimer;
 
   @override
   void didChangeDependencies() {
@@ -33,20 +33,16 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
 
     if (livestreamId != null && accessToken != null) {
       _loadComments();
-      _startAutoRefresh();
+
     }
   }
 
   @override
   void dispose() {
-    autoRefreshTimer?.cancel();
+
     super.dispose();
   }
 
-  void _startAutoRefresh() {
-    autoRefreshTimer?.cancel();
-    autoRefreshTimer = Timer.periodic(const Duration(seconds: 30), (_) => _loadComments());
-  }
 
   Future<void> _loadComments({bool showLoading = true}) async {
     if (showLoading) setState(() => isLoading = true);
@@ -102,7 +98,15 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text("Bình luận livestream")),
+      appBar: AppBar(
+        title: const Text("Bình luận livestream"),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () => _loadComments(), // 👉 bấm để load lại
+          ),
+        ],
+      ),
       body: Column(
         children: [
           Padding(
@@ -224,12 +228,11 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
                                           final userId = comment['from']?['id'];
                                           final name = comment['from']?['name'];
                                           final avatarUrl = comment['from']?['picture']?['data']?['url'];
-
                                           if (userId != null && name != null) {
                                             setState(() => isCreating = true);
                                             final facebookService = FacebookLiveService();
                                             try {
-                                              await facebookService.createOrderFromComment(
+                                              final resultMessage = await facebookService.createOrderFromComment(
                                                 userId: userId,
                                                 name: name,
                                                 avatarUrl: avatarUrl,
@@ -238,20 +241,16 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
                                               );
 
                                               await _loadComments(showLoading: false);
+
                                               if (context.mounted) {
                                                 ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(content: Text("Tạo đơn thành công")),
-                                                );
-                                              }
-                                            } catch (e) {
-                                              if (context.mounted) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(content: Text('In thất bại. Hãy kiểm tra cài đặt máy in')),
+                                                  SnackBar(content: Text(resultMessage)), // ✅ hiển thị theo tình huống
                                                 );
                                               }
                                             } finally {
                                               setState(() => isCreating = false);
                                             }
+
                                           }
                                         },
                                         style: ElevatedButton.styleFrom(

@@ -1,15 +1,22 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:ui' as ui;
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
+import 'package:esc_pos_printer/esc_pos_printer.dart';
+import 'package:esc_pos_utils/esc_pos_utils.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
+import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import 'package:ban_hang/screens/owner/order_management/shipping_itinerary.dart';
+
 import 'package:path_provider/path_provider.dart';
+
+
 
 class OrderCreatedServices {
   final _firestore = FirebaseFirestore.instance;
@@ -442,5 +449,128 @@ class OrderCreatedServices {
       return null;
     }
   }
+  // Future<void> printPdfFromBase64(String base64Str) async {
+  //   try {
+  //     // B1: Lấy thông tin IP và Port của máy in từ Firestore
+  //     final printerInfo = await _getPrinterInfo();
+  //     final String ip = printerInfo['ip'];
+  //     final int port = printerInfo['port'];
+  //
+  //     // B2: Giải mã chuỗi base64 thành dữ liệu byte của PDF
+  //     final Uint8List pdfBytes = base64Decode(base64Str);
+  //
+  //     // B3: Chuyển đổi dữ liệu PDF thành hình ảnh
+  //     final img.Image image = await _convertPdfToImage(pdfBytes);
+  //
+  //     // B4: Gửi hình ảnh đến máy in qua mạng WiFi
+  //     await _printImageOverNetwork(ip, port, image);
+  //
+  //   } catch (e) {
+  //     // Ném lại lỗi để UI có thể bắt và hiển thị thông báo
+  //     print("Lỗi trong quá trình in vận đơn: $e");
+  //     throw Exception("In vận đơn thất bại. Chi tiết: ${e.toString()}");
+  //   }
+  // }
+
+  /// [Hàm phụ 1] - Lấy thông tin máy in từ Firestore
+  Future<Map<String, dynamic>> _getPrinterInfo() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw Exception('Người dùng chưa đăng nhập.');
+    }
+
+    // Lấy shopid của người dùng hiện tại từ bảng 'users'
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    if (!userDoc.exists || userDoc.data()?['shopid'] == null) {
+      throw Exception('Không tìm thấy thông tin shop của người dùng.');
+    }
+    final shopId = userDoc.data()!['shopid'];
+
+    // Tìm máy in có shopid tương ứng trong bảng 'printer'
+    final printerQuery = await FirebaseFirestore.instance
+        .collection('printer')
+        .where('shopid', isEqualTo: shopId)
+        .limit(1)
+        .get();
+
+    if (printerQuery.docs.isEmpty) {
+      throw Exception('Chưa cấu hình máy in cho shop này.');
+    }
+
+    final printerData = printerQuery.docs.first.data();
+    final ip = printerData['IP'] as String?;
+    final port = printerData['Port']; // Port có thể là String hoặc int
+
+    if (ip == null || ip.isEmpty) {
+      throw Exception('Địa chỉ IP của máy in không hợp lệ.');
+    }
+
+    final int? portNumber = (port is int) ? port : int.tryParse(port.toString());
+
+    if (portNumber == null) {
+      throw Exception('Cổng (Port) của máy in không hợp lệ.');
+    }
+
+    return {'ip': ip, 'port': portNumber};
+  }
+
+  /// [Hàm phụ 2] - Chuyển đổi PDF (dưới dạng bytes) thành đối tượng Image
+  // Future<img.Image> _convertPdfToImage(Uint8List pdfBytes) async {
+  //   // Mở tài liệu PDF từ dữ liệu byte
+  //   final document = await pdf.PdfDocument.openData(pdfBytes);
+  //   // Lấy trang đầu tiên (thường vận đơn chỉ có 1 trang)
+  //   final page = await document.getPage(1);
+  //
+  //   // Render trang PDF thành hình ảnh.
+  //   // Chiều rộng 512px là phổ biến cho máy in 80mm (khoảng 203 DPI)
+  //   final pageImage = await page.render(
+  //     width: 512,
+  //     // Tính toán chiều cao tương ứng để giữ đúng tỷ lệ
+  //     height: (page.height * 512 / page.width).round(),
+  //   );
+  //
+  //   // Dọn dẹp tài nguyên
+  //   await page.close();
+  //   await document.close();
+  //
+  //   if (pageImage == null) {
+  //     throw Exception("Không thể chuyển đổi PDF sang ảnh.");
+  //   }
+  //
+  //   // Giải mã dữ liệu byte của ảnh thành đối tượng Image có thể in được
+  //   final decodedImage = img.decodeImage(pageImage.bytes);
+  //   if (decodedImage == null) {
+  //     throw Exception('Không thể giải mã dữ liệu ảnh từ PDF.');
+  //   }
+  //
+  //   return decodedImage;
+  // }
+
+
+  /// [Hàm phụ 3] - Kết nối và gửi lệnh in hình ảnh đến máy in
+  Future<void> _printImageOverNetwork(String ip, int port, img.Image image) async {
+    // Sử dụng khổ giấy 80mm như yêu cầu
+    const PaperSize paper = PaperSize.mm80;
+    final profile = await CapabilityProfile.load();
+    final printer = NetworkPrinter(paper, profile);
+
+    // Kết nối đến máy in với timeout 5 giây
+    final PosPrintResult res = await printer.connect(ip, port: port, timeout: const Duration(seconds: 5));
+
+    if (res == PosPrintResult.success) {
+      // In hình ảnh đã được chuyển đổi
+      printer.image(image, align: PosAlign.center);
+      // Đẩy giấy lên vài dòng cho dễ xé
+      printer.feed(2);
+      // Cắt giấy
+      printer.cut();
+      // Ngắt kết nối
+      printer.disconnect();
+    } else {
+      // Nếu kết nối thất bại, báo lỗi
+      throw Exception('Không thể kết nối đến máy in: ${res.msg}');
+    }
+  }
+
 
 }

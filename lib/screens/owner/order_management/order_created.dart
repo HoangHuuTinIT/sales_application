@@ -370,10 +370,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
 
                                         if (jsonResult["code"] == "1") {
                                           final base64Str = jsonResult["data"]["base64EncodeContent"];
-
-                                          // Gọi hàm in PDF
                                           // await services.printPdfFromBase64(base64Str);
-
                                           if (context.mounted) {
                                             ScaffoldMessenger.of(context).showSnackBar(
                                               const SnackBar(content: Text("Đã gửi vận đơn đến máy in")),

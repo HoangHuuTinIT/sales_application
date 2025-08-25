@@ -164,6 +164,7 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
                             message.formatCurrency(item['totalAmount']),
                             style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
                           ),
+
                         ),
                       ),
                     ),
