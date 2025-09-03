@@ -1,10 +1,13 @@
 import 'dart:convert';
 import 'dart:math';
+import 'package:ban_hang/screens/owner/create_order/setting_shipping_company_for_order.dart';
 import 'package:ban_hang/services/auth_services/auth_service.dart';
+import 'package:ban_hang/utils/message.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:crypto/crypto.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/cupertino.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'package:vietnam_provinces/vietnam_provinces.dart';
@@ -215,25 +218,13 @@ class CustomerOrderServiceLive {
       return data;
     }).toList();
   }
-  Future<void> updateFacebookCustomerByFbid(String fbid, Map<String, dynamic> formData) async {
+  Future<void> updateFacebookCustomerById(String docId, Map<String, dynamic> formData) async {
     try {
-      if (fbid.isEmpty) throw Exception("Thiếu fbid");
+      final docRef = _firestore.collection('facebook_customer').doc(docId);
+      final currentData = (await docRef.get()).data();
 
-      // 1. Lấy document theo fbid
-      final querySnapshot = await _firestore
-          .collection('facebook_customer')
-          .where('fbid', isEqualTo: fbid)
-          .limit(1)
-          .get();
+      if (currentData == null) throw Exception("Không tìm thấy khách hàng");
 
-      if (querySnapshot.docs.isEmpty) {
-        throw Exception("Không tìm thấy khách hàng với fbid này");
-      }
-
-      final docRef = querySnapshot.docs.first.reference;
-      final currentData = querySnapshot.docs.first.data();
-
-      // 2. So sánh và chỉ update các trường thay đổi
       final Map<String, dynamic> updatedData = {};
 
       void checkAndUpdate(String key, dynamic newValue) {
@@ -248,15 +239,14 @@ class CustomerOrderServiceLive {
       checkAndUpdate('email', formData['email']);
       checkAndUpdate('address', formData['address']);
 
-      // Thêm updatedAt để biết lúc nào sửa
       updatedData['updatedAt'] = FieldValue.serverTimestamp();
 
-      // 3. Cập nhật (merge giữ nguyên các trường khác)
       await docRef.set(updatedData, SetOptions(merge: true));
     } catch (e) {
       throw Exception("Lỗi khi cập nhật facebook_customer: $e");
     }
   }
+
   Future<List<Map<String, dynamic>>> loadProductsForCurrentUserByShopId() async {
     final currentUser = FirebaseAuth.instance.currentUser;
     if (currentUser == null) {
@@ -354,7 +344,8 @@ class CustomerOrderServiceLive {
     double shippingFee = 0,   // 👈 thêm
     double prePaid = 0,       // 👈 thêm
     double partnerShippingFee = 0,
-  }) async {
+  })
+  async {
     if (shippingPartner != "J&T") {
       throw "Chỉ hỗ trợ J&T hiện tại";
     }
@@ -388,10 +379,12 @@ class CustomerOrderServiceLive {
     // Parse địa chỉ người nhận
     Map<String, String> recvAddr = parseAddressString(receiverData["address"]);
 
-    // Sinh txlogisticId
-    final now = DateTime.now();
-    final rand = _randomString(4);
-    final txlogisticId = "ODR-${_formatDate(now)}-${_formatTime(now)}-$rand";
+    // ✅ Nếu đã có orderCode thì dùng lại, ngược lại mới generate
+    final txlogisticId = (customerData['orderCode'] != null &&
+        customerData['orderCode'].toString().isNotEmpty)
+        ? customerData['orderCode']
+        : "ODR-${_formatDate(DateTime.now())}-${_formatTime(DateTime.now())}-${_randomString(4)}";
+
 
     // Debug log
     print("Người gửi: ${jt["name"]}, ${jt["mobile"]}, "
@@ -469,10 +462,14 @@ print('bizconten ne: $bizContentStr');
     }
     final respData = jsonDecode(res.body);
     print("J&T Response: $respData");
+    if(respData['code']==999001010){
+      throw "Không hỗ trợ thu hộ với đơn có trị giá trên 30 triệu";
+    }
     final billCode = respData["data"]?["billCode"];
     if (billCode == null || billCode.toString().isEmpty) {
       throw "Không lấy được mã vận đơn từ J&T";
     }
+
     // Lấy thông tin user
     final userData = userDoc.data();
     final createdByName = userData?["name"]; // 👈 lấy tên người tạo
@@ -496,14 +493,24 @@ print('bizconten ne: $bizContentStr');
       "codAmount": codAmount,
       "createdAt": FieldValue.serverTimestamp(),
       "createdBy": createdByName ?? "Không rõ",
-      "totalAmount":totalPrice ,
-      "shopid":shopId,
-      "customerCode":jt["customerCode"],
-      "key" :jt["key"],
+      "totalAmount": totalPrice,
+      "shopid": shopId,
+      "customerCode": jt["customerCode"],
+      "key": jt["key"],
       "customerId": customerData['id'],
-      "fbid": customerData['fbid']??null,
+      "fbid": customerData['fbid'] ?? null,
       "partnerShippingFee": partnerShippingFee,
-      "status": "Đặt hàng"
+      "status": "Đặt hàng",
+
+      // 👇 Thêm phần lưu sản phẩm
+      "items": products.map((p) => {
+        "productId": p["id"],              // id sản phẩm
+        "name": p["name"],                 // tên sản phẩm
+        "price": (p["price"] ?? 0),        // giá tại thời điểm mua
+        "quantity": p["quantity"] ?? 1,    // số lượng
+        "imageUrls": p["imageUrls"] ?? [], // ảnh nếu có
+        "total": (p["price"] ?? 0) * (p["quantity"] ?? 1), // thành tiền từng dòng
+      }).toList(),
     });
   }
 
@@ -623,5 +630,63 @@ print('bizconten ne: $bizContentStr');
       return null;
     }
   }
+  Future<Map<String, dynamic>?> checkJTConfigAndNavigate({
+    required BuildContext context,
+    required double totalPrice,
+    required double totalWeight,
+    required Map<String, dynamic>? temporaryShippingInfo,
+    required String? receiverAddress,
+  }) async {
+    try {
+      final currentUser = FirebaseAuth.instance.currentUser;
+      if (currentUser == null) {
+        message.showSnackbarfalse(context, "Bạn chưa đăng nhập!");
+        return null;
+      }
+
+      final userDoc = await FirebaseFirestore.instance
+          .collection("users")
+          .doc(currentUser.uid)
+          .get();
+
+      final shopId = userDoc.data()?["shopid"];
+      if (shopId == null || shopId.toString().isEmpty) {
+        message.showSnackbarfalse(context, "Tài khoản chưa có shopid!");
+        return null;
+      }
+
+      final jtDoc = await FirebaseFirestore.instance
+          .collection("JT_setting")
+          .doc(shopId)
+          .get();
+
+      if (!jtDoc.exists) {
+        message.showSnackbarfalse(
+          context,
+          "Hãy cấu hình đơn vị vận chuyển trong Cài đặt -> Cài đặt hãng vận chuyển",
+        );
+        return null;
+      }
+
+      // ✅ return kết quả khi pop
+      final result = await Navigator.push<Map<String, dynamic>?>(
+        context,
+        MaterialPageRoute(
+          builder: (_) => SettingShippingCompanyForOrderScreen(
+            totalPrice: totalPrice,
+            totalWeight: totalWeight,
+            initialData: temporaryShippingInfo,
+            receiverAddress: receiverAddress,
+          ),
+        ),
+      );
+
+      return result;
+    } catch (e) {
+      message.showSnackbarfalse(context, "Lỗi khi kiểm tra cấu hình: $e");
+      return null;
+    }
+  }
+
 }
 

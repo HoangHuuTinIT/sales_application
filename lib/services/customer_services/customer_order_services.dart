@@ -4,26 +4,24 @@ import 'package:firebase_auth/firebase_auth.dart';
 class CustomerOrderService {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
-  /// 📌 Lấy danh sách đơn hàng của người dùng hiện tại (mới nhất trước)
-  Stream<QuerySnapshot> getMyOrders() async* {
+  /// 📌 Lấy danh sách đơn hàng của người dùng hiện tại (real-time, nhanh nhất)
+  Stream<QuerySnapshot<Map<String, dynamic>>> getMyOrders() {
     final user = FirebaseAuth.instance.currentUser;
-    if (user == null) throw Exception("Chưa đăng nhập");
+    if (user == null) {
+      throw Exception("Chưa đăng nhập");
+    }
 
-    yield* _firestore
-        .collection('OrderedProducts')
-        .where('userId', isEqualTo: user.uid)
-        .orderBy('createdAt', descending: true)
+    return _firestore
+        .collection('Order')
+        .where('customerId', isEqualTo: user.uid)
+        .orderBy('invoiceDate', descending: true)
         .snapshots();
   }
-
-  /// 📌 Lấy chi tiết sản phẩm và người dùng (nếu cần)
-  Future<List<Map<String, dynamic>?>> getUserAndProduct(
-      String userId,
-      String productId,
-      ) async {
-    final userSnapshot = await _firestore.collection('users').doc(userId).get();
-    final productSnapshot =
-    await _firestore.collection('Products').doc(productId).get();
-    return [userSnapshot.data(), productSnapshot.data()];
+  Future<List<Map<String, dynamic>>> getOrderItems(String orderId) async {
+    final doc = await _firestore.collection('Order').doc(orderId).get();
+    if (!doc.exists) return [];
+    final data = doc.data()!;
+    if (data['items'] == null) return [];
+    return List<Map<String, dynamic>>.from(data['items']);
   }
 }

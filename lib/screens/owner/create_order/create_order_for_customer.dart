@@ -489,24 +489,19 @@ class _CreateOrderForCustomerScreenState
                           message.showSnackbarfalse(context, "Vui lòng chọn sản phẩm trước!");
                         }
                             : () {
-                          // ✅ Kiểm tra địa chỉ giao hàng trước
                           final address = temporaryShippingAddress?['address'] ?? "";
                           if (address.isEmpty || address == "Chưa có địa chỉ") {
                             message.showSnackbarfalse(context, "Hãy chọn địa chỉ người nhận!");
                             return;
                           }
 
-                          // ✅ Nếu có địa chỉ thì mới cho chọn đơn vị giao hàng
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(
-                              builder: (_) => SettingShippingCompanyForOrderScreen(
-                                totalPrice: totalPrice,
-                                totalWeight: totalWeight,
-                                initialData: temporaryShippingInfo,
-                                receiverAddress: temporaryShippingAddress?['address'],
-                              ),
-                            ),
+                          // ✅ Gọi sang service để check trước
+                          CustomerOrderServiceLive().checkJTConfigAndNavigate(
+                            context: context,
+                            totalPrice: totalPrice,
+                            totalWeight: totalWeight,
+                            temporaryShippingInfo: temporaryShippingInfo,
+                            receiverAddress: temporaryShippingAddress?['address'],
                           ).then((result) {
                             if (result != null && mounted) {
                               setState(() {
@@ -515,15 +510,13 @@ class _CreateOrderForCustomerScreenState
                                 shippingNote = result['note'];
                                 temporaryShippingInfo = result;
                                 totalWeight = result['weight'] ?? totalWeight;
-                                temporaryShippingInfo?['shippingFee'] =
-                                    result['shippingFee'] ?? 0;
-                                temporaryShippingInfo?['prePaid'] =
-                                    result['prePaid'] ?? 0;
-                                temporaryShippingInfo?['partnerShippingFee'] =
-                                    result['partnerShippingFee'] ?? 0;
+                                temporaryShippingInfo?['shippingFee'] = result['shippingFee'] ?? 0;
+                                temporaryShippingInfo?['prePaid'] = result['prePaid'] ?? 0;
+                                temporaryShippingInfo?['partnerShippingFee'] = result['partnerShippingFee'] ?? 0;
                               });
                             }
                           });
+
                         },
                       ),
 
@@ -707,15 +700,33 @@ class _CreateOrderForCustomerScreenState
                     totalPrice: totalPrice,
                     totalQuantity: totalQuantity,
                     totalWeight: totalWeight,
-                    codAmount: codAmount ?? totalPrice,
+                    codAmount: codAmount ?? 0,
                     remark: shippingNote ?? "",
                     shippingFee: temporaryShippingInfo?['shippingFee'] ?? 0,
                     prePaid: temporaryShippingInfo?['prePaid'] ?? 0,
                     partnerShippingFee: temporaryShippingInfo?['partnerShippingFee'] ?? 0,
                   );
+                  // ✅ Update OrderedProducts theo orderCode
+                  final orderCode = customerData['orderCode'];
+                  if (orderCode != null && orderCode.toString().isNotEmpty) {
+                    final query = await FirebaseFirestore.instance
+                        .collection('OrderedProducts')
+                        .where('orderCode', isEqualTo: orderCode)
+                        .get();
+
+                    for (var doc in query.docs) {
+                      await doc.reference.update({'status': 'Đơn đã tạo'});
+                    }
+                  }
+
                   message.showSnackbartrue(context, "Tạo đơn thành công!");
-                  Navigator.pop(context, customerData);
-                } else {
+                  Navigator.pop(context, {
+                    'success': true,
+                    'customerData': customerData,
+                  });
+
+                }
+                else {
                   message.showSnackbarfalse(
                       context, "Chỉ hỗ trợ tạo đơn với đối tác J&T!");
                 }

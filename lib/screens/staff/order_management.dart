@@ -17,16 +17,12 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
 
   String _searchName = '';
   DateTime? _selectedDate;
-  String? _selectedStatus;
+  String? _selectedStatus = 'Đang chờ xác nhận';
 
   final List<String> _statusOptions = [
     'Đang chờ xác nhận',
-    'Đang tiến hành đóng gói',
-    'Đóng gói hoàn tất',
-    'Shipper nhận hàng',
-    'Đang vận chuyển',
-    'Hoàn tất thanh toán',
-    'Đơn hàng bị hủy',
+    'Hủy đơn',
+    'Đơn đã tạo',
   ];
 
   @override
@@ -163,6 +159,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                     final paymentMethod = data['paymentMethod'] ?? '';
                     final status = data['status'] ?? '';
                     final totalAmount = data['totalAmount'] ?? 0;
+                    final nameSearch = data['nameSearch'] ?? '';
 
                     return Card(
                       elevation: 4,
@@ -172,6 +169,7 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                         subtitle: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            Text('Người đặt: $nameSearch'),
                             Text('Ngày: ${DateFormat('dd/MM/yyyy HH:mm').format(createdAt)}'),
                             Text('Phương thức: $paymentMethod'),
                             Text('Trạng thái: $status'),
@@ -194,14 +192,25 @@ class _OrderManagementScreenState extends State<OrderManagementScreen> {
                               final customerData = await _orderService.prepareOrderData(doc.id);
 
                               if (customerData != null && mounted) {
-                                Navigator.push(
+                                final result = await Navigator.push(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) => CreateOrderForCustomerScreen(
-                                      customerData: customerData,
+                                      customerData: {
+                                        ...customerData,
+                                        'orderCode': orderCode, // ✅ truyền orderCode qua
+                                      },
                                     ),
                                   ),
                                 );
+
+
+                                if (result is Map && result['success'] == true) {
+                                  await FirebaseFirestore.instance
+                                      .collection('OrderedProducts')
+                                      .doc(doc.id)
+                                      .delete();
+                                }
                               }
                             }
                           },

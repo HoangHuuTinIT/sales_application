@@ -114,7 +114,7 @@ class OrderManagementService {
       return {
         'id': userId,
         'name': userData['name'] ?? 'Chưa có tên',
-        'phone': userData['phone'] ?? 'Chưa có số điện thoại',
+        'phone': userData['phone'] ??  'Chưa có số điện thoại',
         'address': userData['address'] ?? 'Chưa có địa chỉ',
         'avatarUrl': userData['avatarUrl'],
         'status': userData['status'] ?? 'Bình thường',

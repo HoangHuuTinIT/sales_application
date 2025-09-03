@@ -46,7 +46,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
           backgroundColor: Colors.transparent,
           foregroundColor: Colors.indigo,
           centerTitle: true,
-          title: const Text("Quên mật khẩu"),
+          title: const Text("Mật khẩu"),
         ),
         body: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
@@ -57,7 +57,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 const Icon(Icons.lock_reset, size: 100, color: Colors.indigo),
                 const SizedBox(height: 16),
                 const Text(
-                  "Nhập email của bạn để khôi phục mật khẩu",
+                  "Nhập email của bạn",
                   style: TextStyle(fontSize: 18, color: Colors.black87),
                   textAlign: TextAlign.center,
                 ),
@@ -111,7 +111,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                     )
                         : const Text(
-                      "Gửi email khôi phục",
+                      "Gửi email",
                       style: TextStyle(fontSize: 16),
                     ),
                   ),

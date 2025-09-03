@@ -31,10 +31,10 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
   }
 // MỚI: Hàm fetch dữ liệu ban đầu
   Future<void> _fetchOrders() async {
-    final data = await _services.getCreatedOrders();
+    final data = await _services.getCreatedOrdersStream();
     setState(() {
-      _allOrders = data;
-      _filteredOrders = data;
+      _allOrders = data as List<Map<String, dynamic>>;
+      _filteredOrders = data as List<Map<String, dynamic>>;
     });
   }
 
@@ -152,39 +152,41 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
       ),
     ),
     const Divider(),
-
             // THAY ĐỔI: Phần hiển thị danh sách
             Expanded(
-              child: FutureBuilder<void>(
-                // 1. Dùng _initFuture để xử lý việc tải dữ liệu ban đầu
-                future: _initFuture,
+              child: StreamBuilder<List<Map<String, dynamic>>>(
+                stream: _services.getCreatedOrdersStream(),
                 builder: (context, snapshot) {
-                  // Trong khi chờ tải dữ liệu, hiển thị loading
                   if (snapshot.connectionState == ConnectionState.waiting) {
                     return const Center(child: CircularProgressIndicator());
                   }
 
-                  // Nếu có lỗi, hiển thị thông báo lỗi
                   if (snapshot.hasError) {
-                    return const Center(
-                        child: Text("Đã xảy ra lỗi khi tải dữ liệu"));
+                    return const Center(child: Text("Đã xảy ra lỗi khi tải dữ liệu"));
                   }
 
-                  // 2. Nếu danh sách lọc rỗng, hiển thị thông báo
-                  if (_filteredOrders.isEmpty) {
-                    return const Center(
-                        child: Text("Không tìm thấy đơn hàng nào"));
+                  if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                    return const Center(child: Text("Không tìm thấy đơn hàng nào"));
                   }
 
-                  // 3. Dùng _filteredOrders để hiển thị danh sách
+                  // 🔹 Áp dụng bộ lọc (tìm kiếm + ngày)
+                  final filteredOrders = _services.filterAndSearchOrders(
+                    allOrders: snapshot.data!,
+                    searchQuery: _searchController.text,
+                    selectedDate: _selectedDate,
+                  );
+
+                  if (filteredOrders.isEmpty) {
+                    return const Center(child: Text("Không tìm thấy đơn hàng nào"));
+                  }
+
                   return ListView.builder(
-                    itemCount: _filteredOrders.length,
+                    itemCount: filteredOrders.length,
                     itemBuilder: (context, index) {
-                      final order = _filteredOrders[index];
-                      // Card UI giữ nguyên như cũ
+                      final order = filteredOrders[index];
+
                       return Card(
-                        margin: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                        margin: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
@@ -192,8 +194,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                             children: [
                               // 🔹 Mã đơn + tổng tiền
                               Row(
-                                mainAxisAlignment: MainAxisAlignment
-                                    .spaceBetween,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   Text(
                                     order["txlogisticId"] ?? "",
@@ -203,8 +204,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                     ),
                                   ),
                                   Text(
-                                    "  ${message.formatCurrency(
-                                        order["totalAmount"]) ?? 0}",
+                                    "  ${message.formatCurrency(order["totalAmount"]) ?? 0}",
                                   ),
                                 ],
                               ),
@@ -228,13 +228,10 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                     onPressed: () {
                                       final billCode = order["billCode"] ?? "";
                                       if (billCode.isNotEmpty) {
-                                        Clipboard.setData(
-                                            ClipboardData(text: billCode));
-                                        ScaffoldMessenger.of(context)
-                                            .showSnackBar(
+                                        Clipboard.setData(ClipboardData(text: billCode));
+                                        ScaffoldMessenger.of(context).showSnackBar(
                                           const SnackBar(
-                                              content: Text(
-                                                  "Đã copy mã vận đơn")),
+                                              content: Text("Đã copy mã vận đơn")),
                                         );
                                       }
                                     },
@@ -253,17 +250,11 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                     child: Text.rich(
                                       TextSpan(
                                         children: [
-                                          TextSpan(
-                                              text: order["customerName"] ??
-                                                  ""),
+                                          TextSpan(text: order["customerName"] ?? ""),
                                           const TextSpan(text: " | "),
-                                          TextSpan(
-                                              text: order["customerPhone"] ??
-                                                  ""),
+                                          TextSpan(text: order["customerPhone"] ?? ""),
                                           const TextSpan(text: " | "),
-                                          TextSpan(
-                                              text: order["shippingAddress"] ??
-                                                  ""),
+                                          TextSpan(text: order["shippingAddress"] ?? ""),
                                         ],
                                       ),
                                       softWrap: true,
@@ -281,8 +272,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                   Text("${order["shippingPartner"] ?? ""} |"),
                                   const SizedBox(width: 12),
                                   Text(
-                                      "COD: ${message.formatCurrency(
-                                          order["codAmount"]) ?? 0}"),
+                                      "COD: ${message.formatCurrency(order["codAmount"]) ?? 0}"),
                                 ],
                               ),
                               const SizedBox(height: 6),
@@ -294,18 +284,17 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                   const SizedBox(width: 6),
                                   Expanded(
                                     child: Text(
-                                      "Người tạo đơn: ${order["createdBy"] ??
-                                          ""} | ${order["shippingNote"] ?? ""}",
+                                      "Người tạo đơn: ${order["createdBy"] ?? ""} | ${order["shippingNote"] ?? ""}",
                                       overflow: TextOverflow.ellipsis,
                                     ),
                                   ),
                                 ],
                               ),
                               const SizedBox(height: 6),
+
                               // 🔹 Trạng thái + ngày + Popup
                               Row(
-                                mainAxisAlignment:
-                                MainAxisAlignment.spaceBetween,
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
                                   // Status badge
                                   Container(
@@ -324,12 +313,10 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                         Container(
                                           width: 8,
                                           height: 8,
-                                          margin:
-                                          const EdgeInsets.only(right: 6),
+                                          margin: const EdgeInsets.only(right: 6),
                                           decoration: BoxDecoration(
                                             shape: BoxShape.circle,
-                                            color:
-                                            _getStatusColor(order["status"]),
+                                            color: _getStatusColor(order["status"]),
                                           ),
                                         ),
                                         Text(
@@ -337,8 +324,7 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                           style: TextStyle(
                                             fontSize: 13,
                                             fontWeight: FontWeight.w600,
-                                            color: _getStatusColor(
-                                                order["status"]),
+                                            color: _getStatusColor(order["status"]),
                                           ),
                                         ),
                                       ],
@@ -349,124 +335,149 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                     style: const TextStyle(
                                         fontSize: 12, color: Colors.grey),
                                   ),
-                            // PopupMenu
-                            PopupMenuButton<String>(
-                              onSelected: (value) async {
-                                final services = OrderCreatedServices();
-                                if (value == "print") {
-                                  if (order["shippingPartner"] == "J&T") {
-                                    showDialog(
-                                      context: context,
-                                      barrierDismissible: false,
-                                      builder: (_) => const Center(child: CircularProgressIndicator()),
-                                    );
+                                  // PopupMenu
+                                  PopupMenuButton<String>(
+                                    onSelected: (value) async {
+                                      final services = OrderCreatedServices();
+                                      if (value == "print") {
+                                        if (order["shippingPartner"] == "J&T") {
+                                          showDialog(
+                                            context: context,
+                                            barrierDismissible: false,
+                                            builder: (_) => const Center(
+                                                child: CircularProgressIndicator()),
+                                          );
+                                          try {
+                                            final result =
+                                            await services.printOrderJT(order);
+                                            Navigator.pop(context); // tắt loading
 
-                                    try {
-                                      final result = await services.printOrderJT(order);
-                                      Navigator.pop(context); // tắt loading
+                                            if (result != null) {
+                                              final jsonResult = jsonDecode(result);
 
-                                      if (result != null) {
-                                        final jsonResult = jsonDecode(result);
-
-                                        if (jsonResult["code"] == "1") {
-                                          final base64Str = jsonResult["data"]["base64EncodeContent"];
-                                          // await services.printPdfFromBase64(base64Str);
-                                          if (context.mounted) {
+                                              if (jsonResult["code"] == "1") {
+                                                final base64Str =
+                                                jsonResult["data"]["base64EncodeContent"];
+                                                if (context.mounted) {
+                                                  ScaffoldMessenger.of(context)
+                                                      .showSnackBar(
+                                                    const SnackBar(
+                                                        content: Text(
+                                                            "Đã gửi vận đơn đến máy in")),
+                                                  );
+                                                }
+                                              } else {
+                                                ScaffoldMessenger.of(context).showSnackBar(
+                                                  SnackBar(
+                                                      content: Text(
+                                                          "In thất bại: ${jsonResult["msg"]}")),
+                                                );
+                                              }
+                                            } else {
+                                              ScaffoldMessenger.of(context).showSnackBar(
+                                                const SnackBar(
+                                                    content: Text(
+                                                        "Không in được vận đơn J&T")),
+                                              );
+                                            }
+                                          } catch (e) {
+                                            Navigator.pop(context);
                                             ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(content: Text("Đã gửi vận đơn đến máy in")),
+                                              SnackBar(
+                                                  content: Text("Lỗi in vận đơn: $e")),
                                             );
                                           }
                                         } else {
                                           ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(content: Text("In thất bại: ${jsonResult["msg"]}")),
+                                            const SnackBar(
+                                                content:
+                                                Text("Đơn vị này chưa hỗ trợ in vận đơn")),
                                           );
                                         }
-                                      } else {
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text("Không in được vận đơn J&T")),
-                                        );
                                       }
-                                    } catch (e) {
-                                      Navigator.pop(context);
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(content: Text("Lỗi in vận đơn: $e")),
-                                      );
-                                    }
-                                  } else {
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(content: Text("Đơn vị này chưa hỗ trợ in vận đơn")),
-                                    );
-                                  }
-                                }
-                                if (value == "cancel") {
-                                  await services.showCancelDialog(context, order);
-                                } else if (value == "delete") {
-                                  await services.showDeleteDialog(context, order);
-                                } else if (value == "trace") {
-                                  // Hiển thị loading
-                                  showDialog(
-                                    context: context,
-                                    barrierDismissible: false, // Không cho đóng khi nhấn ngoài
-                                    builder: (context) {
-                                      return const Center(
-                                        child: CircularProgressIndicator(),
-                                      );
+                                      if (value == "cancel") {
+                                        await services.showCancelDialog(context, order);
+                                      } else if (value == "delete") {
+                                        await services.showDeleteDialog(context, order);
+                                      } else if (value == "trace") {
+                                        showDialog(
+                                          context: context,
+                                          barrierDismissible: false,
+                                          builder: (context) {
+                                            return const Center(
+                                              child: CircularProgressIndicator(),
+                                            );
+                                          },
+                                        );
+                                        try {
+                                          final result =
+                                          await services.traceOrderJT(order);
+                                          if (result != null && context.mounted) {
+                                            Navigator.pop(context); // Tắt loading
+                                            Navigator.push(
+                                              context,
+                                              MaterialPageRoute(
+                                                builder: (_) => ShippingItineraryScreen(
+                                                    response: result),
+                                              ),
+                                            );
+                                          } else {
+                                            Navigator.pop(context); // Tắt loading
+                                            ScaffoldMessenger.of(context).showSnackBar(
+                                              const SnackBar(
+                                                  content:
+                                                  Text("Không tìm thấy hành trình")),
+                                            );
+                                          }
+                                        } catch (e) {
+                                          Navigator.pop(context); // Tắt loading nếu lỗi
+                                          ScaffoldMessenger.of(context).showSnackBar(
+                                            SnackBar(
+                                                content: Text("Lỗi tra hành trình: $e")),
+                                          );
+                                        }
+                                      } else if (value == "copy_customer") {
+                                        final info =
+                                            "${order["customerName"]} - ${order["customerPhone"]} - ${order["shippingAddress"]}";
+                                        await services.copyToClipboard(
+                                            context, info, "Đã copy thông tin khách hàng");
+                                      } else if (value == "copy_cod") {
+                                        await services.copyToClipboard(
+                                            context,
+                                            "${order["codAmount"] ?? "0"}",
+                                            "Đã copy số tiền COD");
+                                      }
                                     },
-                                  );
-                                  try {
-                                    final result = await services.traceOrderJT(order);
-                                    if (result != null && context.mounted) {
-                                      Navigator.pop(context); // Tắt loading
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ShippingItineraryScreen(response: result),
-                                        ),
-                                      );
-                                    } else {
-                                      Navigator.pop(context); // Tắt loading
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        const SnackBar(content: Text("Không tìm thấy hành trình")),
-                                      );
-                                    }
-                                  } catch (e) {
-                                    Navigator.pop(context); // Tắt loading nếu lỗi
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      SnackBar(content: Text("Lỗi tra hành trình: $e")),
-                                    );
-                                  }
-                                }
-                                else if (value == "copy_customer") {
-                                  final info =
-                                      "${order["customerName"]} - ${order["customerPhone"]} - ${order["shippingAddress"]}";
-                                  await services.copyToClipboard(context, info, "Đã copy thông tin khách hàng");
-                                } else if (value == "copy_cod") {
-                                  await services.copyToClipboard(
-                                      context, "${order["codAmount"] ?? "0"}", "Đã copy số tiền COD");
-                                }
-                              },
-                              itemBuilder: (context) => const [
-                                PopupMenuItem(value: "cancel", child: Text("Hủy đơn")),
-                                PopupMenuItem(value: "delete", child: Text("Xóa đơn")),
-                                PopupMenuItem(value: "trace", child: Text("Tra hành trình")),
-                                PopupMenuItem(value: "copy_customer", child: Text("Copy thông tin khách hàng")),
-                                PopupMenuItem(value: "copy_cod", child: Text("Copy số tiền COD")),
-                                PopupMenuItem(value: "print", child: Text("In vận đơn")), // ➕ thêm mới
-                              ],
-                            )
-                          ],
+                                    itemBuilder: (context) => const [
+                                      PopupMenuItem(
+                                          value: "cancel", child: Text("Hủy đơn")),
+                                      PopupMenuItem(
+                                          value: "delete", child: Text("Xóa đơn")),
+                                      PopupMenuItem(
+                                          value: "trace", child: Text("Tra hành trình")),
+                                      PopupMenuItem(
+                                          value: "copy_customer",
+                                          child: Text("Copy thông tin khách hàng")),
+                                      PopupMenuItem(
+                                          value: "copy_cod",
+                                          child: Text("Copy số tiền COD")),
+                                      PopupMenuItem(
+                                          value: "print", child: Text("In vận đơn")),
+                                    ],
+                                  )
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
-                      ],
-                    ),
-                  ),
-                );
-              },
-            );
-          },
-        ),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
 
-    ),
-  ]
+          ]
       )
     );
   }

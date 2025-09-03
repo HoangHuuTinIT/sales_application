@@ -1,7 +1,6 @@
+import 'package:ban_hang/screens/owner/create_order/add_customer_for_order.dart';
 import 'package:ban_hang/screens/owner/create_order/create_order_for_customer.dart';
 import 'package:ban_hang/services/owner_services/customer_order_service.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 class ChoseCustomerForOrderScreen extends StatefulWidget {
@@ -56,7 +55,34 @@ class _ChoseCustomerForOrderScreenState extends State<ChoseCustomerForOrderScree
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Chọn khách hàng')),
+      appBar: AppBar(
+        title: const Text('Chọn khách hàng'),
+        actions: [
+          PopupMenuButton<String>(
+            onSelected: (value) async {
+              if (value == 'add_customer') {
+                final result = await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const AddCustomerForOrderScreen(),
+                  ),
+                );
+
+                if (result == true) {
+                  _loadCustomers(); // refresh lại danh sách khách
+                }
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem<String>(
+                value: 'add_customer',
+                child: Text('Thêm khách hàng'),
+              ),
+            ],
+          ),
+        ],
+      ),
+
       body: isLoading
           ? const Center(child: CircularProgressIndicator())
           : Column(

@@ -22,67 +22,63 @@ class OrderCreatedServices {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
 
-  Future<List<Map<String, dynamic>>> getCreatedOrders() async {
+  Stream<List<Map<String, dynamic>>> getCreatedOrdersStream() async* {
     final user = _auth.currentUser;
-    if (user == null) return [];
+    if (user == null) {
+      yield [];
+      return;
+    }
 
     final userDoc = await _firestore.collection("users").doc(user.uid).get();
     final userData = userDoc.data();
-    if (userData == null) return [];
-
-    final shopId = userData["shopid"];
-    if (shopId == null) return [];
-
-    final query = await _firestore
-        .collection("Order")
-        .where("shopid", isEqualTo: shopId)
-        .get();
-
-    List<Map<String, dynamic>> orders = [];
-
-    for (var doc in query.docs) {
-      final data = doc.data();
-
-      String createdByName = "";
-      if (data["createdBy"] != null) {
-        final userQuery = await _firestore
-            .collection("users")
-            .where("uid", isEqualTo: data["createdBy"])
-            .limit(1)
-            .get();
-
-        if (userQuery.docs.isNotEmpty) {
-          createdByName = userQuery.docs.first.data()["name"] ?? "";
-        }
-      }
-
-      DateTime? invoiceDateRaw;
-      String invoiceDate = "";
-      if (data["invoiceDate"] is Timestamp) {
-        invoiceDateRaw = (data["invoiceDate"] as Timestamp).toDate();
-        invoiceDate = DateFormat("dd/MM/yyyy HH:mm").format(invoiceDateRaw);
-      }
-
-      orders.add({
-        "docId": doc.id,
-        ...data,
-        "createdByName": createdByName,
-        "invoiceDate": invoiceDate,
-        "invoiceDateRaw": invoiceDateRaw,
-      });
+    if (userData == null) {
+      yield [];
+      return;
     }
 
-    orders.sort((a, b) {
-      final da = a["invoiceDateRaw"] as DateTime?;
-      final db = b["invoiceDateRaw"] as DateTime?;
-      if (da == null && db == null) return 0;
-      if (da == null) return 1;
-      if (db == null) return -1;
-      return db.compareTo(da);
-    });
+    final shopId = userData["shopid"];
+    if (shopId == null) {
+      yield [];
+      return;
+    }
 
-    return orders;
+    // 🔹 Lấy map userId -> tên
+    final usersQuery = await _firestore.collection("users").get();
+    final Map<String, String> userNames = {
+      for (var u in usersQuery.docs) u.id: (u.data()["name"] ?? "")
+    };
+
+    // 🔹 Lắng nghe đơn hàng realtime
+    yield* _firestore
+        .collection("Order")
+        .where("shopid", isEqualTo: shopId)
+        .orderBy("invoiceDate", descending: true) // đảm bảo invoiceDate là Timestamp
+        .snapshots()
+        .map((query) {
+      return query.docs.map((doc) {
+        final data = doc.data();
+
+        final createdBy = data["createdBy"];
+        final createdByName = createdBy != null ? userNames[createdBy] ?? "" : "";
+
+        DateTime? invoiceDateRaw;
+        String invoiceDate = "";
+        if (data["invoiceDate"] is Timestamp) {
+          invoiceDateRaw = (data["invoiceDate"] as Timestamp).toDate();
+          invoiceDate = DateFormat("dd/MM/yyyy HH:mm").format(invoiceDateRaw);
+        }
+
+        return {
+          "docId": doc.id,
+          ...data,
+          "createdByName": createdByName,
+          "invoiceDate": invoiceDate,
+          "invoiceDateRaw": invoiceDateRaw,
+        };
+      }).toList();
+    });
   }
+
 
   // MỚI: Phương thức xử lý tìm kiếm và lọc
   List<Map<String, dynamic>> filterAndSearchOrders({
@@ -131,10 +127,8 @@ class OrderCreatedServices {
       final txlogisticId = order["txlogisticId"];
       final key = order["key"];
       final passwordRaw = "$key${"jadada369t3"}";
-
       final password =
       md5.convert(utf8.encode(passwordRaw)).toString().toUpperCase();
-
       final bizContent = {
         "customerCode": customerCode,
         "password": password,
@@ -161,8 +155,8 @@ class OrderCreatedServices {
           "bizContent": bizContentStr,
         },
       );
-
       return response.statusCode == 200;
+
     } catch (e) {
       print("Error cancelOrder: $e");
       return false;
@@ -284,27 +278,24 @@ class OrderCreatedServices {
   }
 
   /// 🔹 Hiện dialog xác nhận hủy
-  Future<void> showCancelDialog(BuildContext context,
-      Map<String, dynamic> order) async {
+  Future<void> showCancelDialog(BuildContext context, Map<String, dynamic> order) async {
     const defaultReason = "Hủy bởi người bán";
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (context) =>
-          AlertDialog(
-            title: const Text("Xác nhận hủy đơn"),
-            content: const Text(
-                "Bạn có chắc chắn muốn hủy và xóa đơn này không?"),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context, false),
-                child: const Text("Không"),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(context, true),
-                child: const Text("Có"),
-              ),
-            ],
+      builder: (ctx) => AlertDialog(
+        title: const Text("Xác nhận hủy đơn"),
+        content: const Text("Bạn có chắc chắn muốn hủy và xóa đơn này không?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Không"),
           ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Có"),
+          ),
+        ],
+      ),
     );
 
     if (confirm == true) {
@@ -316,20 +307,27 @@ class OrderCreatedServices {
 
       final success = await cancelOrder(order, defaultReason);
 
+      if (!context.mounted) return; // ⬅️ thêm dòng này
+
+      Navigator.pop(context); // tắt loading
+
       if (success) {
         await deleteOrder(order, defaultReason);
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Đã hủy và xóa đơn thành công")),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Đã hủy và xóa đơn thành công")),
+          );
+        }
       } else {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text("Hủy đơn thất bại")),
-        );
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Hủy đơn thất bại")),
+          );
+        }
       }
     }
   }
+
 
   /// 🔹 Hiện dialog xác nhận xóa
   Future<void> showDeleteDialog(BuildContext context,

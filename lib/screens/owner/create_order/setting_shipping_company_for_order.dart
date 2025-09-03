@@ -36,6 +36,7 @@ class _SettingShippingCompanyForOrderScreenState extends State<SettingShippingCo
   Map<String, dynamic>? partnerInfo;
   double partnerShippingFee=0;
   bool isRecalculating = false;
+  bool isWeightChanged = false; // theo dõi thay đổi khối lượng
 
   @override
   void initState() {
@@ -49,6 +50,7 @@ class _SettingShippingCompanyForOrderScreenState extends State<SettingShippingCo
       weight = data['weight'] ?? widget.totalWeight;
       shippingFee = data['shippingFee'] ?? 0;   // 👈 thêm nếu bạn có phí ship
       prePaid = data['prePaid'] ?? 0;// 👈 thêm nếu bạn có trả trước
+      partnerShippingFee = data['partnerShippingFee'] ?? 0;
       goodsType = partnerInfo?['goodsType'] ?? '';
       productType = partnerInfo?['productType'] ?? '';
       prov = partnerInfo?['prov']??'';
@@ -160,9 +162,18 @@ class _SettingShippingCompanyForOrderScreenState extends State<SettingShippingCo
             TextFormField(
               initialValue: weight.toString(),
               keyboardType: TextInputType.number,
-              decoration: const InputDecoration(labelText: 'Khối lượng (kg)', border: OutlineInputBorder()),
-              onChanged: (v) => setState(() => weight = double.tryParse(v) ?? 0),
+              decoration: const InputDecoration(
+                labelText: 'Khối lượng (kg)',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (v) {
+                setState(() {
+                  weight = double.tryParse(v) ?? 0;
+                  isWeightChanged = true; // ✅ có thay đổi khối lượng
+                });
+              },
             ),
+
             const SizedBox(height: 16),
             // --- Phí giao hàng của đối tác ---
             Row(
@@ -210,11 +221,11 @@ class _SettingShippingCompanyForOrderScreenState extends State<SettingShippingCo
                           codMoney: codAmount,
                           goodsValue: widget.totalPrice,
                         );
-
                         if (feeData != null) {
                           setState(() {
                             partnerShippingFee = feeData['standardTotalFee'];
                             codAmount = widget.totalPrice + shippingFee - prePaid;
+                            isWeightChanged = false; // ✅ đã tính lại → reset flag
                           });
                         }
                       }
@@ -294,15 +305,26 @@ class _SettingShippingCompanyForOrderScreenState extends State<SettingShippingCo
                     return;
                   }
 
-                  // ✅ Check phí giao hàng đối tác trước khi xác nhận
+                  // ✅ Nếu chưa tính phí đối tác (partnerShippingFee = 0) thì báo lỗi
                   if (partnerShippingFee == 0) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text("Hãy tính lại phí ship!"),
+                        content: Text("Vui lòng tính phí giao hàng trước khi xác nhận."),
                         backgroundColor: Colors.red,
                       ),
                     );
-                    return; // không cho xác nhận
+                    return;
+                  }
+
+                  // ✅ Nếu khối lượng đã thay đổi mà chưa tính lại phí
+                  if (isWeightChanged) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text("Khối lượng đã thay đổi, hãy tính lại phí ship!"),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                    return;
                   }
 
                   // Nếu ok thì pop về màn hình trước
@@ -313,10 +335,12 @@ class _SettingShippingCompanyForOrderScreenState extends State<SettingShippingCo
                     'partnerInfo': partnerInfo,
                     'weight': weight,
                     'shippingFee': shippingFee,
-                    'prePaid' : prePaid,
-                    'partnerShippingFee': partnerShippingFee, // ✅ thêm dòng này
+                    'prePaid': prePaid,
+                    'partnerShippingFee': partnerShippingFee,
                   });
                 },
+
+
                 child: const Text("Xác nhận"),
               ),
 
@@ -347,15 +371,15 @@ class _SettingShippingCompanyForOrderScreenState extends State<SettingShippingCo
     );
 
     if (confirm == true) {
-      if (partnerShippingFee == 0) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text("Hãy tính lại phí ship!"),
-            backgroundColor: Colors.red,
-          ),
-        );
-        return false;
-      }
+      // if (partnerShippingFee == 0) {
+      //   ScaffoldMessenger.of(context).showSnackBar(
+      //     const SnackBar(
+      //       content: Text("Hãy tính lại phí ship!"),
+      //       backgroundColor: Colors.red,
+      //     ),
+      //   );
+      //   return false;
+      // }
       return true;
     }
     return false;

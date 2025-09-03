@@ -1,4 +1,4 @@
-import 'package:ban_hang/services/owner_services/printer_service.dart';
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:esc_pos_printer/esc_pos_printer.dart';
 import 'package:esc_pos_utils/esc_pos_utils.dart';
@@ -12,25 +12,68 @@ class FacebookLiveService {
 
   final PhoneNumberUtil _phoneNumberUtil = PhoneNumberUtil();
 
-  Future<List<Map<String, dynamic>>> getLivestreams(String pageId,
-      String accessToken) async {
+  Future<List<Map<String, dynamic>>> getLivestreams(
+      String pageId, String accessToken) async {
     final url = Uri.parse(
-        'https://graph.facebook.com/v19.0/$pageId/live_videos?access_token=$accessToken');
-    final res = await http.get(url);
+      'https://graph.facebook.com/v23.0/$pageId/live_videos'
+          '?broadcast_status=["LIVE"]'
+          '&fields=id,live_status,permalink_url,title,description'
+          '&access_token=$accessToken',
+    );
 
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      final liveVideos = data['data'] as List;
-      return liveVideos.map((e) => Map<String, dynamic>.from(e)).toList();
+    final response = await http.get(url);
+
+    if (response.statusCode == 200) {
+      final data = json.decode(response.body);
+      final videos = data['data'] as List;
+      return videos.map((e) => Map<String, dynamic>.from(e)).toList();
     } else {
-      throw Exception("Không thể lấy livestream");
+      throw Exception('Error: ${response.body}');
     }
   }
+
+
+  Future<List<Map<String, dynamic>>> loadComments(String livestreamId,
+      String accessToken,) async {
+    // Step 1: Get raw comments from Facebook
+    final comments = await getComments(livestreamId, accessToken);
+
+    // Step 2: Extract unique Facebook user IDs from comments
+    final userIds = comments
+        .map((c) => c['from']?['id'])
+        .whereType<String>()
+        .toSet();
+
+    if (userIds.isEmpty) return comments;
+
+    // Step 3: Fetch corresponding users from Firestore
+    final usersSnapshot = await FirebaseFirestore.instance
+        .collection('users')
+        .where(FieldPath.documentId, whereIn: userIds.toList())
+        .get();
+
+    final userMap = {
+      for (var doc in usersSnapshot.docs) doc.id: doc.data(),
+    };
+
+    // Step 4: Assign status from Firestore to comments
+    for (var comment in comments) {
+      final fbId = comment['from']?['id'];
+      if (fbId != null && userMap.containsKey(fbId)) {
+        comment['status'] = userMap[fbId]?['status'];
+      }
+    }
+
+    return comments;
+  }
+
+
+
 
   Future<List<Map<String, dynamic>>> getComments(String livestreamId,
       String accessToken) async {
     final url = Uri.parse(
-      'https://graph.facebook.com/v19.0/$livestreamId/comments?fields=from{name,picture{url}},message,created_time&access_token=$accessToken',
+      'https://graph.facebook.com/v23.0/$livestreamId/comments?fields=from{name,picture{url}},message,created_time&access_token=$accessToken',
     );
     final res = await http.get(url);
     if (res.statusCode == 200) {
@@ -95,7 +138,7 @@ class FacebookLiveService {
   Future<void> createCustomerRecordsIfNotExists({
     required String fbid,
     required String name,
-    required String? avatarUrl,
+    // required String? avatarUrl,
     required String creatorId,
   }) async {
     final firestore = FirebaseFirestore.instance;
@@ -122,7 +165,7 @@ class FacebookLiveService {
       await newDocRef.set({
         'name': name,
         'fbid': fbid,
-        'avatarUrl': avatarUrl,
+        // 'avatarUrl': avatarUrl,
         'status': 'Bình thường',
         'creatorId': creatorId,
         'createdAt': Timestamp.now(),
@@ -155,40 +198,6 @@ class FacebookLiveService {
     }
   }
 
-
-  Future<List<Map<String, dynamic>>> loadComments(String livestreamId,
-      String accessToken,) async {
-    // Step 1: Get raw comments from Facebook
-    final comments = await getComments(livestreamId, accessToken);
-
-    // Step 2: Extract unique Facebook user IDs from comments
-    final userIds = comments
-        .map((c) => c['from']?['id'])
-        .whereType<String>()
-        .toSet();
-
-    if (userIds.isEmpty) return comments;
-
-    // Step 3: Fetch corresponding users from Firestore
-    final usersSnapshot = await FirebaseFirestore.instance
-        .collection('users')
-        .where(FieldPath.documentId, whereIn: userIds.toList())
-        .get();
-
-    final userMap = {
-      for (var doc in usersSnapshot.docs) doc.id: doc.data(),
-    };
-
-    // Step 4: Assign status from Firestore to comments
-    for (var comment in comments) {
-      final fbId = comment['from']?['id'];
-      if (fbId != null && userMap.containsKey(fbId)) {
-        comment['status'] = userMap[fbId]?['status'];
-      }
-    }
-
-    return comments;
-  }
 
   Future<void> printComment({
     required String host, // IP máy in
@@ -254,7 +263,7 @@ class FacebookLiveService {
   Future<String> createOrderFromComment({
     required String userId,
     required String name,
-    required String? avatarUrl,
+    // required String? avatarUrl,
     required String time,
     required String message,
   }) async {
@@ -265,7 +274,7 @@ class FacebookLiveService {
     await createCustomerRecordsIfNotExists(
       fbid: userId,
       name: name,
-      avatarUrl: avatarUrl,
+      // avatarUrl: avatarUrl,
       creatorId: currentUserId,
     );
 

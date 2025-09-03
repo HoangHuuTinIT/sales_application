@@ -1,6 +1,8 @@
+import 'package:ban_hang/screens/auth/forgot_password.dart';
 import 'package:ban_hang/screens/auth/signin.dart';
 import 'package:ban_hang/screens/owner/order_management/order_created.dart';
 import 'package:ban_hang/screens/staff/order_management.dart';
+import 'package:ban_hang/services/auth_services/forgot_password_service.dart';
 import 'package:flutter/material.dart';
 import 'package:ban_hang/screens/staff/categories_management.dart';
 import 'package:ban_hang/screens/staff/product_management.dart';
@@ -27,12 +29,23 @@ class HomeOwnerScreen extends StatelessWidget {
                       (route) => false,
                 );
               }
+              if (value == 'change_password') {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                );
+              }
             },
             itemBuilder: (context) => [
               const PopupMenuItem(
                 value: 'logout',
                 child: Text('Đăng xuất'),
               ),
+              const PopupMenuItem(
+                value: 'change_password',
+                child: Text('Đổi mật khẩu'),
+              ),
+
             ],
           ),
         ],

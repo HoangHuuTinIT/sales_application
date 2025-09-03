@@ -116,7 +116,6 @@ class _FacebookSalesScreenState extends State<FacebookSalesScreen> {
           const SizedBox(height: 20),
           if (connected.isNotEmpty)
             const Text("Kênh đã kết nối", style: TextStyle(fontWeight: FontWeight.bold)),
-
           ...connected.map((account) => FutureBuilder<List<Map<String, dynamic>>>(
             future: account['pagesFuture'],
             builder: (context, snapshot) {

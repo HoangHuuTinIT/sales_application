@@ -27,7 +27,9 @@ class _ListLivestreamsScreenState extends State<ListLivestreamsScreen> {
       final result = await FacebookLiveService()
           .getLivestreams(page!['pageId'], page!['accessToken']);
       setState(() => livestreams = result);
-    } catch (e) {
+    }
+
+    catch (e) {
       debugPrint("Lỗi load livestream: $e");
     } finally {
       setState(() => isLoading = false); // Tắt loading

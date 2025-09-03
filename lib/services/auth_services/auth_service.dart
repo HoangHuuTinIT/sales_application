@@ -163,7 +163,8 @@ class AuthService {
 
   Future<void> signUpWithGoogleAndCheck({
     required BuildContext context,
-  }) async {
+  })
+  async {
     try {
       final googleSignIn = GoogleSignIn(scopes: ['email']);
       await googleSignIn.signOut();

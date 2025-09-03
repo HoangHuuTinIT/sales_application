@@ -1,11 +1,12 @@
 // import thêm
 import 'dart:async';
-
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:ban_hang/services/owner_services/facebook_live_service.dart';
+import 'package:socket_io_client/socket_io_client.dart';
+import 'package:socket_io_client/socket_io_client.dart' as IO;
 
 class CommentOnFacebookScreen extends StatefulWidget {
   const CommentOnFacebookScreen({super.key});
@@ -23,24 +24,52 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
   String? accessToken;
   String searchKeyword = '';
   // Timer? autoRefreshTimer;
-
+  late IO.Socket socket;
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
     final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
     livestreamId = args?['livestreamId'];
     accessToken = args?['accessToken'];
-
     if (livestreamId != null && accessToken != null) {
       _loadComments();
 
     }
   }
 
-  @override
-  void dispose() {
 
-    super.dispose();
+  @override
+  void initState() {
+    super.initState();
+    _initSocket();
+  }
+
+  void _initSocket() {
+    socket = IO.io(
+      "https://socket-server-642296570221.asia-southeast1.run.app", // thay bằng URL của bạn
+      IO.OptionBuilder()
+          .setTransports(['websocket'])
+          .disableAutoConnect()
+          .build(),
+    );
+
+    socket.connect();
+
+    socket.onConnect((_) {
+      print("✅ Connected to server");
+    });
+
+    socket.on("new_comment", (data) {
+      print("💬 Received new comment: $data");
+      setState(() {
+        comments.insert(0, Map<String, dynamic>.from(data));
+        _applyFilter();
+      });
+    });
+
+    socket.onDisconnect((_) {
+      print("❌ Disconnected");
+    });
   }
 
 
@@ -49,6 +78,14 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
 
     try {
       final result = await FacebookLiveService().loadComments(livestreamId!, accessToken!);
+
+      // 🔹 Sắp xếp theo thời gian (mới nhất lên đầu)
+      result.sort((a, b) {
+        final timeA = DateTime.tryParse(a['created_time'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        final timeB = DateTime.tryParse(b['created_time'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
+        return timeB.compareTo(timeA); // đảo ngược để mới nhất đứng trước
+      });
+
       setState(() {
         comments = result;
         _applyFilter();
@@ -75,7 +112,11 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
       }
     });
   }
-
+  @override
+  void dispose() {
+    super.dispose();
+    socket.dispose();
+  }
   Future<void> _filterByPhoneNumbers() async {
     setState(() => isLoading = true);
     final filtered = await FacebookLiveService().filterCommentsWithPhoneNumbers(comments);
@@ -235,7 +276,7 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
                                               final resultMessage = await facebookService.createOrderFromComment(
                                                 userId: userId,
                                                 name: name,
-                                                avatarUrl: avatarUrl,
+                                                // avatarUrl: avatarUrl,
                                                 time: _formatVietnamTime(comment['created_time'] ?? ''),
                                                 message: comment['message'] ?? '',
                                               );

@@ -115,7 +115,8 @@ class _EditCustomerForOrderScreenState
     };
 
     await CustomerOrderServiceLive()
-        .updateFacebookCustomerByFbid(widget.initialData['fbid'], formData);
+        .updateFacebookCustomerById(widget.customerId, formData);
+
 
     Navigator.pop(context, formData);
   }
