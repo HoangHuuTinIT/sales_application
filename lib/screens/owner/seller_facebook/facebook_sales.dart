@@ -132,18 +132,27 @@ class _FacebookSalesScreenState extends State<FacebookSalesScreen> {
                   title: Text(account['name']),
                   subtitle: const Text("Kênh đã kết nối"),
                   trailing: PopupMenuButton<String>(
-                      onSelected: (value) async {
-                        if (value == 'add_page') {
-                          final result = await Navigator.pushNamed(context, '/chose-facebook-page', arguments: account);
-                          if (result == true) {
-                            _loadAccounts(); // Chỉ load lại nếu thực sự có thêm
-                          }
+                    onSelected: (value) async {
+                      if (value == 'add_page') {
+                        final result = await Navigator.pushNamed(context, '/chose-facebook-page', arguments: account);
+                        if (result == true) {
+                          _loadAccounts(); // Chỉ load lại nếu thực sự có thêm
                         }
-                      },
-                      itemBuilder: (context) => const [
+                      } else if (value == 'logout') {
+                        // Gọi hàm logout khi người dùng chọn "Đăng xuất"
+                        await FacebookAuthService().logout(account['fbUserId']);
+                        _loadAccounts(); // Tải lại danh sách tài khoản
+                      }
+                    },
+                    itemBuilder: (context) => const [
                       PopupMenuItem<String>(
                         value: 'add_page',
                         child: Text("Thêm trang mới"),
+                      ),
+                      // Thêm mục "Đăng xuất" vào menu
+                      PopupMenuItem<String>(
+                        value: 'logout',
+                        child: Text("Đăng xuất"),
                       ),
                     ],
                   ),

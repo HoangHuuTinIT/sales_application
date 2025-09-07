@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:phone_number/phone_number.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class FacebookLiveService {
 
@@ -70,20 +71,20 @@ class FacebookLiveService {
 
 
 
-  Future<List<Map<String, dynamic>>> getComments(String livestreamId,
-      String accessToken) async {
-    final url = Uri.parse(
-      'https://graph.facebook.com/v23.0/$livestreamId/comments?fields=from{name,picture{url}},message,created_time&access_token=$accessToken',
-    );
-    final res = await http.get(url);
-    if (res.statusCode == 200) {
-      final data = json.decode(res.body);
-      final comments = data['data'] as List;
-      return comments.map((c) => Map<String, dynamic>.from(c)).toList();
-    } else {
-      throw Exception("Không thể lấy comment");
-    }
-  }
+  // Future<List<Map<String, dynamic>>> getComments(String livestreamId,
+  //     String accessToken) async {
+  //   final url = Uri.parse(
+  //     'https://graph.facebook.com/v23.0/$livestreamId/comments?fields=from{name,picture{url}},message,created_time&access_token=$accessToken',
+  //   );
+  //   final res = await http.get(url);
+  //   if (res.statusCode == 200) {
+  //     final data = json.decode(res.body);
+  //     final comments = data['data'] as List;
+  //     return comments.map((c) => Map<String, dynamic>.from(c)).toList();
+  //   } else {
+  //     throw Exception("Không thể lấy comment");
+  //   }
+  // }
 
 
   /// Lọc comment có chứa số điện thoại (dựa vào regex + chuẩn hóa nếu cần)
@@ -199,71 +200,9 @@ class FacebookLiveService {
   }
 
 
-  Future<void> printComment({
-    required String host, // IP máy in
-    required int port, // Cổng máy in, thường là 9100
-    required String userId,
-    required String name,
-    required String time,
-    required String message,
-  }) async {
-    final profile = await CapabilityProfile.load();
-    final printer = NetworkPrinter(PaperSize.mm58, profile);
-
-    final PosPrintResult res = await printer.connect(host, port: port);
-
-    if (res == PosPrintResult.success) {
-      printer.text('--- Thông tin comment ---',
-          styles: PosStyles(align: PosAlign.center, bold: true));
-      printer.text('ID: $userId');
-      printer.text('Tên: $name');
-      printer.text('Thời gian: $time');
-      printer.text('Nội dung: $message');
-      printer.hr();
-      printer.text('HHT',
-          styles: PosStyles(align: PosAlign.center, bold: true));
-      printer.cut();
-      printer.disconnect();
-    } else {
-
-      throw Exception('Kết nối máy in thất bại: $res');
-
-    }
-  }
-
-  Future<Map<String, dynamic>?> getPrinterForCurrentShop() async {
-    final user = FirebaseAuth.instance.currentUser;
-    if (user == null) return null;
-
-    final firestore = FirebaseFirestore.instance;
-
-    // 🔹 Lấy shopid từ bảng users
-    final userDoc = await firestore.collection('users').doc(user.uid).get();
-    final shopId = userDoc.data()?['shopid'];
-    if (shopId == null) {
-      debugPrint("⚠️ User chưa có shopid");
-      return null;
-    }
-
-    // 🔹 Lấy máy in có shopid trùng khớp
-    final query = await firestore
-        .collection('printer')
-        .where('shopid', isEqualTo: shopId)
-        .limit(1)
-        .get();
-
-    if (query.docs.isNotEmpty) {
-      return query.docs.first.data() as Map<String, dynamic>;
-    }
-
-    debugPrint("⚠️ Không tìm thấy máy in cho shopid: $shopId");
-    return null;
-  }
-
   Future<String> createOrderFromComment({
     required String userId,
     required String name,
-    // required String? avatarUrl,
     required String time,
     required String message,
   }) async {
@@ -274,38 +213,183 @@ class FacebookLiveService {
     await createCustomerRecordsIfNotExists(
       fbid: userId,
       name: name,
-      // avatarUrl: avatarUrl,
       creatorId: currentUserId,
     );
 
-    // 2. Lấy máy in theo shopid
-    final printerConfig = await getPrinterForCurrentShop();
+    // ❌ Bỏ toàn bộ logic máy in & in comment
 
-    if (printerConfig != null) {
-      final host = printerConfig['IP'] ?? '192.168.1.100';
-      final port = (printerConfig['Port'] is int) ? printerConfig['Port'] : 9100;
-
-      try {
-        await printComment(
-          host: host,
-          port: port,
-          userId: userId,
-          name: name,
-          time: time,
-          message: message,
-        );
-        return "Tạo đơn thành công"; // ✅ có in thành công
-      } catch (e) {
-        debugPrint('❌ Lỗi khi in: $e');
-        return "Thêm khách thành công, in thất bại. Hãy kiểm tra cài đặt máy in"; // ✅ in lỗi
-      }
-    } else {
-      debugPrint('⚠️ Không tìm thấy máy in cho shop hiện tại, bỏ qua in');
-      return "Thêm khách thành công, bạn có thể in đơn nếu cài đặt máy in trong cài đặt"; // ✅ không có máy in
-    }
-
-    // Sau này bạn có thể bổ sung tạo đơn hàng vào đây nếu cần
+    return "Thành công"; // ✅ chỉ báo đã thêm khách
   }
 
+  Future<List<Map<String, dynamic>>> loadCommentsByUser ({
+    required String livestreamId,
+    required String accessToken,
+    required String userId,
+  }) async {
+    final allComments = await loadComments(livestreamId, accessToken);
+    final userComments = allComments.where((c) => c['from']?['id'] == userId).toList();
+    return userComments;
+  }
+  // Thêm các hàm này vào cuối class FacebookLiveService
 
+  // Hàm lấy shopId của người dùng hiện tại
+  Future<String?> _getCurrentShopId() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return null;
+    final userDoc = await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
+    return userDoc.data()?['shopid'];
+  }
+
+  // Hàm kiểm tra và lấy thông tin khách hàng từ fbid
+  Future<Map<String, dynamic>?> getFacebookCustomerInfo(String fbid) async {
+    final shopId = await _getCurrentShopId();
+    if (shopId == null) return null;
+
+    final firestore = FirebaseFirestore.instance;
+
+    // 1. Tìm khách hàng trong bảng 'facebook_customer' bằng fbid
+    final customerQuery = await firestore
+        .collection('facebook_customer')
+        .where('fbid', isEqualTo: fbid)
+        .limit(1)
+        .get();
+
+    if (customerQuery.docs.isEmpty) {
+      return null; // Không tìm thấy khách hàng
+    }
+
+    // 2. Lấy DocumentReference của khách hàng vừa tìm được
+    final customerDoc = customerQuery.docs.first;
+    final customerRef = customerDoc.reference;
+
+    // 3. Kiểm tra xem khách hàng này có thuộc shop hiện tại không
+    final shopCustomerQuery = await firestore
+        .collection('shop_facebook_customer')
+        .where('customerRef', isEqualTo: customerRef)
+        .where('shopid', isEqualTo: shopId)
+        .limit(1)
+        .get();
+
+    if (shopCustomerQuery.docs.isNotEmpty) {
+      // Nếu có, trả về dữ liệu của khách hàng đó
+      return customerDoc.data();
+    }
+
+    return null; // Khách hàng không thuộc shop này
+  }
+
+  // Lấy danh sách tin nhắn nhanh theo shopId (dưới dạng Stream)
+  Stream<QuerySnapshot> getQuickRepliesStream() async* {
+    final shopId = await _getCurrentShopId();
+    if (shopId != null) {
+      yield* FirebaseFirestore.instance
+          .collection('quick_reply')
+          .where('shopid', isEqualTo: shopId)
+          .snapshots();
+    }
+  }
+
+  // Thêm tin nhắn nhanh mới
+  Future<void> addQuickReply({required String title, required String message}) async {
+    final shopId = await _getCurrentShopId();
+    if (shopId == null) {
+      throw Exception("Không tìm thấy shop của người dùng.");
+    }
+    if (title.isEmpty || message.isEmpty) {
+      throw Exception("Tiêu đề và nội dung không được để trống.");
+    }
+
+    await FirebaseFirestore.instance.collection('quick_reply').add({
+      'shopid': shopId,
+      'title': title,
+      'message': message,
+    });
+  }
+  Future<void> replyToComment({
+    required String commentId,
+    required String message,
+    required String accessToken,
+  }) async {
+    final url =
+    Uri.parse('https://graph.facebook.com/v23.0/$commentId/comments');
+    final response = await http.post(
+      url,
+      body: {
+        'message': message,
+        'access_token': accessToken,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      print("Successfully replied to comment $commentId");
+      // Trả về void vì thành công không cần giá trị trả về
+    } else {
+      print(
+          "Failed to reply. Status: ${response.statusCode}, Body: ${response.body}");
+      // Ném ra một Exception để UI có thể bắt và hiển thị lỗi
+      throw Exception('Không thể gửi trả lời: ${response.body}');
+    }
+  }
+  /// Kiểm tra và thực hiện cuộc gọi tới khách hàng qua fbid.
+  Future<void> makePhoneCall({required String fbid}) async {
+    // Tận dụng hàm đã có để lấy thông tin khách hàng
+    final customerData = await getFacebookCustomerInfo(fbid);
+
+    if (customerData != null) {
+      // Kiểm tra xem khách hàng có trường 'phone' không
+      final phoneNumber = customerData['phone'];
+
+      if (phoneNumber != null && phoneNumber.toString().isNotEmpty) {
+        final uri = Uri.parse('tel:$phoneNumber');
+        if (await canLaunchUrl(uri)) {
+          await launchUrl(uri);
+        } else {
+          throw Exception('Không thể thực hiện cuộc gọi tới số $phoneNumber');
+        }
+      } else {
+        // Ném ra lỗi nếu không có SĐT
+        throw Exception('Chưa có số điện thoại của khách hàng này');
+      }
+    } else {
+      // Ném ra lỗi nếu không tìm thấy khách hàng
+      throw Exception('Không tìm thấy thông tin khách hàng');
+    }
+  }
+  Future<List<Map<String, dynamic>>> getComments(String livestreamId, String accessToken) async {
+    // Thêm is_hidden vào danh sách các trường cần lấy
+    final url = Uri.parse(
+      'https://graph.facebook.com/v19.0/$livestreamId/comments?fields=from{name,picture{url}},message,created_time,is_hidden&access_token=$accessToken',
+    );
+    final res = await http.get(url);
+    if (res.statusCode == 200) {
+      final data = json.decode(res.body);
+      final comments = data['data'] as List;
+      return comments.map((c) => Map<String, dynamic>.from(c)).toList();
+    } else {
+      throw Exception("Không thể lấy comment: ${res.body}");
+    }
+  }
+  /// Ẩn hoặc bỏ ẩn một bình luận.
+  /// Yêu cầu quyền 'pages_manage_engagement'.
+  Future<void> setCommentHiddenState({
+    required String commentId,
+    required String accessToken,
+    required bool isHidden, // true để ẩn, false để bỏ ẩn
+  }) async {
+    final url = Uri.parse('https://graph.facebook.com/v19.0/$commentId');
+
+    final response = await http.post(
+      url,
+      body: {
+        'is_hidden': isHidden.toString(), // Gửi 'true' hoặc 'false'
+        'access_token': accessToken,
+      },
+    );
+
+    if (response.statusCode == 200) {
+      print("Successfully set hidden state to $isHidden for comment $commentId");
+    } else {
+      throw Exception('Failed to set hidden state: ${response.body}');
+    }
+  }
 }

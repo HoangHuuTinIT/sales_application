@@ -44,41 +44,30 @@ app.get("/fbWebhook", (req, res) => {
   }
 });
 // ✅ Webhook Facebook (POST để nhận event)
-// ✅ Webhook Facebook (POST để nhận event) - PHIÊN BẢN ĐÃ SỬA LỖI
 app.post("/fbWebhook", express.json(), (req, res) => {
   const body = req.body;
-  // Ghi lại toàn bộ payload nhận được để dễ dàng debug
   console.log("📩 Webhook received:", JSON.stringify(body, null, 2));
-
   try {
     if (body.object === "page") {
       for (const entry of body.entry) {
         const changes = entry.changes || [];
         for (const change of changes) {
-          console.log(`Processing change with field: "${change.field}"`);
 
-          let commentData = null;
+          // ⭐ LOGIC ĐÚNG: Chỉ cần tập trung vào "feed" cho cả bài viết thường và livestream
+          if (change.field === 'feed') {
+            const feedEvent = change.value;
 
-          // ⭐ LOGIC MỚI: Xử lý cho cả livestream và bài viết thường
-          if (change.field === 'live_videos') {
-            // Đây là sự kiện từ Livestream
-            // Thường thì comment_id sẽ nằm trong value
-            console.log("Detected live_video change.");
-            commentData = change.value;
-          } else if (change.field === 'feed' && change.value?.item === 'comment') {
-            // Đây là sự kiện từ bài viết thường
-            console.log("Detected feed comment change.");
-            commentData = change.value;
+            // Kiểm tra xem đây có phải là một bình luận MỚI không
+            if (feedEvent && feedEvent.item === 'comment' && feedEvent.verb === 'add') {
+              console.log("💬 Emitting new_comment event with data:", feedEvent);
+              // Gửi dữ liệu bình luận xuống client qua socket.io
+              io.emit("new_comment", feedEvent);
+            } else {
+              // Ghi log các sự kiện khác trong feed để debug (ví dụ: like, edit comment, new post)
+              console.log(`Skipping feed event: item='${feedEvent.item}', verb='${feedEvent.verb}'`);
+            }
           }
-
-          // Nếu đã xác định được có dữ liệu comment
-          if (commentData) {
-            console.log("💬 Emitting new_comment event with data:", commentData);
-            // Gửi xuống client qua socket.io
-            io.emit("new_comment", commentData);
-          } else {
-            console.log("Change did not contain relevant comment data. Skipping.");
-          }
+          // Không cần xử lý 'live_videos' để lấy comment
         }
       }
     }
@@ -87,7 +76,7 @@ app.post("/fbWebhook", express.json(), (req, res) => {
   } catch (err) {
     console.error("❌ Error processing webhook:", err);
     res.sendStatus(500); // Báo lỗi server nếu có vấn đề
-}
+  }
 });
 
 // 🚀 Cloud Run yêu cầu listen đúng cổng PORT

@@ -1,13 +1,13 @@
-// import thêm
 import 'dart:async';
+import 'package:ban_hang/widgets/comment_item.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:ban_hang/services/owner_services/facebook_live_service.dart';
-import 'package:socket_io_client/socket_io_client.dart';
 import 'package:socket_io_client/socket_io_client.dart' as IO;
-
+import 'package:ban_hang/widgets/quick_reply_sheet.dart';
+// enum ReplyActionType { replyToComment, sendMessage }
 class CommentOnFacebookScreen extends StatefulWidget {
   const CommentOnFacebookScreen({super.key});
 
@@ -23,41 +23,53 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
   String? livestreamId;
   String? accessToken;
   String searchKeyword = '';
-  // Timer? autoRefreshTimer;
+  String? filteredUserId;
   late IO.Socket socket;
+
+  // phân trang
+  int currentPage = 1;
+  final int commentsPerPage = 70;
+
+  // quản lý trạng thái "đang tạo đơn" cho từng comment
+  Set<String> creatingOrders = {};
+
+  // Xóa toàn bộ nội dung của hàm này
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
-    livestreamId = args?['livestreamId'];
-    accessToken = args?['accessToken'];
-    if (livestreamId != null && accessToken != null) {
-      _loadComments();
-
-    }
   }
 
-
+// Thay thế hàm initState cũ bằng hàm này
   @override
   void initState() {
     super.initState();
+
+    // Dùng Future.delayed để đảm bảo context đã sẵn sàng
+    Future.delayed(Duration.zero, () {
+      if (mounted) {
+        final args = ModalRoute.of(context)?.settings.arguments as Map<String, dynamic>?;
+        if (args != null) {
+          livestreamId = args['livestreamId'];
+          accessToken = args['accessToken'];
+          if (livestreamId != null && accessToken != null) {
+            _loadComments();
+          }
+        }
+      }
+    });
+
     _initSocket();
   }
 
   void _initSocket() {
     socket = IO.io(
-      "https://socket-server-642296570221.asia-southeast1.run.app", // thay bằng URL của bạn
-      IO.OptionBuilder()
-          .setTransports(['websocket'])
-          .disableAutoConnect()
-          .build(),
+      "https://socket-server-642296570221.asia-southeast1.run.app",
+      IO.OptionBuilder().setTransports(['websocket']).disableAutoConnect().build(),
     );
 
     socket.connect();
 
-    socket.onConnect((_) {
-      print("✅ Connected to server");
-    });
+    socket.onConnect((_) => print("✅ Connected to server"));
 
     socket.on("new_comment", (data) {
       print("💬 Received new comment: $data");
@@ -67,11 +79,31 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
       });
     });
 
-    socket.onDisconnect((_) {
-      print("❌ Disconnected");
-    });
+    socket.onDisconnect((_) => print("❌ Disconnected"));
   }
 
+  void _filterCommentsByUser(String userId, String userName) {
+    setState(() {
+      filteredUserId = userId;
+      searchKeyword = '';
+      _applyFilter();
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Đang hiển thị bình luận của $userName'),
+        action: SnackBarAction(
+          label: 'Xem tất cả',
+          onPressed: () {
+            setState(() {
+              filteredUserId = null;
+              _applyFilter();
+            });
+          },
+        ),
+      ),
+    );
+  }
 
   Future<void> _loadComments({bool showLoading = true}) async {
     if (showLoading) setState(() => isLoading = true);
@@ -79,15 +111,16 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
     try {
       final result = await FacebookLiveService().loadComments(livestreamId!, accessToken!);
 
-      // 🔹 Sắp xếp theo thời gian (mới nhất lên đầu)
+      // sort theo thời gian
       result.sort((a, b) {
         final timeA = DateTime.tryParse(a['created_time'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
         final timeB = DateTime.tryParse(b['created_time'] ?? '') ?? DateTime.fromMillisecondsSinceEpoch(0);
-        return timeB.compareTo(timeA); // đảo ngược để mới nhất đứng trước
+        return timeB.compareTo(timeA);
       });
 
       setState(() {
         comments = result;
+        filteredUserId = null;
         _applyFilter();
       });
     } catch (e) {
@@ -97,59 +130,292 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
     }
   }
 
-
   void _applyFilter() {
+    List<Map<String, dynamic>> temp = comments;
+
+    if (filteredUserId != null) {
+      temp = temp.where((c) => c['from']?['id'] == filteredUserId).toList();
+    }
+
+    if (searchKeyword.trim().isNotEmpty) {
+      final keyword = searchKeyword.toLowerCase();
+      temp = temp.where((c) {
+        final message = c['message']?.toString().toLowerCase() ?? '';
+        final name = c['from']?['name']?.toString().toLowerCase() ?? '';
+        return message.contains(keyword) || name.contains(keyword);
+      }).toList();
+    }
+
     setState(() {
-      if (searchKeyword.trim().isEmpty) {
-        filteredComments = comments;
-      } else {
-        filteredComments = comments.where((c) {
-          final message = c['message']?.toString().toLowerCase() ?? '';
-          final name = c['from']?['name']?.toString().toLowerCase() ?? '';
-          final keyword = searchKeyword.toLowerCase();
-          return message.contains(keyword) || name.contains(keyword);
-        }).toList();
-      }
+      filteredComments = temp;
+      currentPage = 1; // reset về trang đầu khi filter
     });
   }
-  @override
-  void dispose() {
-    super.dispose();
-    socket.dispose();
-  }
+
   Future<void> _filterByPhoneNumbers() async {
     setState(() => isLoading = true);
     final filtered = await FacebookLiveService().filterCommentsWithPhoneNumbers(comments);
     setState(() {
       filteredComments = filtered;
       isLoading = false;
+      currentPage = 1;
     });
   }
 
   String _formatVietnamTime(String utcTime) {
     try {
       final dtUtc = DateTime.parse(utcTime);
-      final dtVN = dtUtc.toLocal().add(const Duration(hours: 7));
+      final dtVN = dtUtc.toLocal().add(const Duration(hours: 0));
       return DateFormat('HH:mm dd/MM/yyyy').format(dtVN);
     } catch (_) {
       return utcTime;
     }
   }
 
+  // phân trang
+  List<Map<String, dynamic>> get _pagedComments {
+    final start = (currentPage - 1) * commentsPerPage;
+    final end = (start + commentsPerPage).clamp(0, filteredComments.length);
+    return filteredComments.sublist(start, end);
+  }
+
+  int get _totalPages => (filteredComments.length / commentsPerPage).ceil();
+
+  @override
+  void dispose() {
+    socket.dispose();
+    super.dispose();
+  }
+  void _showCustomerInfoSheet(BuildContext context, Map<String, dynamic> comment)
+  {
+    final from = comment['from'] ?? {};
+    final fbid = from['id'] ?? '';
+    final name = from['name'] ?? 'Ẩn danh';
+    final avatarUrl = from['picture']?['data']?['url'];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (sheetContext) {
+        return FutureBuilder<Map<String, dynamic>?>(
+          future: FacebookLiveService().getFacebookCustomerInfo(fbid),
+          builder: (context, snapshot) {
+            final bool isCurrentlyHidden = comment['is_hidden'] ?? false;
+            Widget infoWidget;
+            // ... (Phần code hiển thị thông tin khách hàng giữ nguyên)
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              infoWidget = const Center(child: CircularProgressIndicator());
+            } else {
+              final customerData = snapshot.data;
+              if (customerData != null) {
+                // Hiển thị đầy đủ thông tin
+                infoWidget = Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Expanded(
+                            child: Text(customerData['name'] ?? name,
+                                style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18))),
+                        if (avatarUrl != null)
+                          CircleAvatar(
+                              backgroundImage: NetworkImage(avatarUrl)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        const Icon(Icons.phone, size: 16, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Text(customerData['phone'] ?? 'Chưa có SĐT'),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Row(
+                      children: [
+                        const Icon(Icons.location_on,
+                            size: 16, color: Colors.grey),
+                        const SizedBox(width: 4),
+                        Expanded(
+                            child: Text(
+                                customerData['address'] ?? 'Chưa có địa chỉ')),
+                      ],
+                    ),
+                  ],
+                );
+              } else {
+                // Hiển thị thông tin cơ bản
+                infoWidget = Row(
+                  children: [
+                    Expanded(
+                        child: Text(name,
+                            style: const TextStyle(
+                                fontWeight: FontWeight.bold, fontSize: 18))),
+                    if (avatarUrl != null)
+                      CircleAvatar(
+                          backgroundImage: NetworkImage(avatarUrl)),
+                  ],
+                );
+              }
+            }
+            return Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Wrap(
+                runSpacing: 20,
+                children: [
+                  infoWidget,
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      TextButton.icon(
+                          onPressed: () {
+                            // Khi nhấn "Trả lời"
+                            Navigator.pop(sheetContext); // Đóng sheet hiện tại
+                            _showQuickReplySheet(
+                              context,
+                              comment: comment,
+                              actionType: ReplyActionType.replyToComment,
+                            );
+                          },
+                          icon: const Icon(Icons.reply),
+                          label: const Text("Trả lời")),
+                      TextButton.icon(
+                          onPressed: () {
+                            // Khi nhấn "Gửi tin nhắn"
+                            Navigator.pop(sheetContext); // Đóng sheet hiện tại
+                            _showQuickReplySheet(
+                              context,
+                              comment: comment,
+                              actionType: ReplyActionType.sendMessage,
+                            );
+                          },
+                          icon: const Icon(Icons.send),
+                          label: const Text("Gửi tin nhắn")),
+                      if (isCurrentlyHidden)
+                      // Nếu đang bị ẩn, hiển thị nút "Bỏ ẩn"
+                        TextButton.icon(
+                          onPressed: () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            Navigator.pop(sheetContext);
+                            try {
+                              await FacebookLiveService().setCommentHiddenState(
+                                commentId: comment['id'],
+                                accessToken: accessToken!,
+                                isHidden: false, // <-- Bỏ ẩn
+                              );
+                              messenger.showSnackBar(const SnackBar(content: Text("Đã bỏ ẩn bình luận.")));
+                              _loadComments(showLoading: false);
+                            } catch (e) {
+                              messenger.showSnackBar(SnackBar(content: Text("Lỗi: $e")));
+                            }
+                          },
+                          icon: const Icon(Icons.visibility),
+                          label: const Text("Bỏ ẩn"),
+                        )
+                      else
+                      // Nếu đang hiển thị, hiển thị nút "Ẩn"
+                        TextButton.icon(
+                          onPressed: () async {
+                            final messenger = ScaffoldMessenger.of(context);
+                            Navigator.pop(sheetContext);
+                            try {
+                              await FacebookLiveService().setCommentHiddenState(
+                                commentId: comment['id'],
+                                accessToken: accessToken!,
+                                isHidden: true, // <-- Ẩn
+                              );
+                              messenger.showSnackBar(const SnackBar(content: Text("Đã ẩn bình luận.")));
+                              _loadComments(showLoading: false);
+                            } catch (e) {
+                              messenger.showSnackBar(SnackBar(content: Text("Lỗi: $e")));
+                            }
+                          },
+                          icon: const Icon(Icons.visibility_off),
+                          label: const Text("Ẩn"),
+                        ),
+                    ],
+                  ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceAround,
+                    children: [
+                      // Bên trong hàm _showCustomerInfoSheet
+// ...
+                      TextButton.icon(
+                        onPressed: () async {
+                          // BƯỚC 1: Lấy tham chiếu đến ScaffoldMessenger và Context TRƯỚC
+                          final messenger = ScaffoldMessenger.of(context);
+                          final currentContext = context; // Có thể dùng trực tiếp context cũng được
+
+                          // BƯỚC 2: Đóng bottom sheet
+                          Navigator.pop(sheetContext);
+
+                          try {
+                            // BƯỚC 3: Gọi hàm service
+                            await FacebookLiveService().makePhoneCall(fbid: fbid);
+                          } catch (e) {
+                            // BƯỚC 4: Dùng tham chiếu đã lấy để hiển thị thông báo.
+                            // Cách này an toàn hơn vì không phải "tìm kiếm" lại context.
+                            messenger.showSnackBar(
+                              SnackBar(content: Text(e.toString().replaceFirst("Exception: ", ""))),
+                            );
+                          }
+                        },
+                        icon: const Icon(Icons.call),
+                        label: const Text("Gọi"),
+                      ),
+// ...
+                      TextButton.icon(onPressed: (){}, icon: const Icon(Icons.comment), label: const Text("Bình luận")),
+                    ],
+                  )
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+
+  void _showQuickReplySheet(
+      BuildContext context, {
+        required Map<String, dynamic> comment,
+        required ReplyActionType actionType,
+      })
+  {
+    final name = comment['from']?['name'] ?? 'Ẩn danh';
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => Padding(
+        padding:
+        EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+        child: QuickReplySheet(
+          userName: name,
+          comment: comment,
+          actionType: actionType,
+          accessToken: accessToken!, // Truyền accessToken vào
+        ),
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
         title: const Text("Bình luận livestream"),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            onPressed: () => _loadComments(), // 👉 bấm để load lại
-          ),
+          IconButton(icon: const Icon(Icons.refresh), onPressed: () => _loadComments()),
         ],
       ),
       body: Column(
         children: [
+          // Header (Search và Filter)
           Padding(
             padding: const EdgeInsets.all(8.0),
             child: TextField(
@@ -158,164 +424,44 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
                 prefixIcon: Icon(Icons.search),
                 border: OutlineInputBorder(),
               ),
-              onChanged: (value) {
+              onChanged: (value) => setState(() {
                 searchKeyword = value;
                 _applyFilter();
-              },
+              }),
             ),
           ),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8.0),
-            child: Row(
-              children: [
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: _filterByPhoneNumbers,
-                    icon: const Icon(Icons.phone),
-                    label: const Text("Có số điện thoại"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green ),
-                  ),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: ElevatedButton.icon(
-                    onPressed: () {
-                      setState(() {
-                        filteredComments = comments;
-                      });
-                    },
-                    icon: const Icon(Icons.list),
-                    label: const Text("Tất cả"),
-                    style: ElevatedButton.styleFrom(backgroundColor: Colors.green ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 8),
+          // Phần danh sách comment được rút gọn
           Expanded(
             child: isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : filteredComments.isEmpty
                 ? const Center(child: Text("Không có bình luận nào"))
                 : ListView.builder(
-              itemCount: filteredComments.length,
+              itemCount: _pagedComments.length,
               itemBuilder: (context, index) {
-                final comment = filteredComments[index];
-                final from = comment['from'];
-                final avatarUrl = from?['picture']?['data']?['url'];
-                final name = from?['name'] ?? '(Ẩn danh)';
-                final message = comment['message'] ?? '';
-                final time = _formatVietnamTime(comment['created_time'] ?? '');
-                final status = comment['status'] ?? '';
-                bool isCreating = false;
-                return StatefulBuilder(
-                  builder: (context, setState) {
-                    return Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(right: 8),
-                            child: avatarUrl != null
-                                ? CircleAvatar(backgroundImage: NetworkImage(avatarUrl), radius: 22)
-                                : const CircleAvatar(child: Icon(Icons.person), radius: 22),
-                          ),
-                          Expanded(
-                            child: Container(
-                              padding: const EdgeInsets.all(10),
-                              decoration: BoxDecoration(
-                                color: Colors.grey.shade100,
-                                border: Border.all(color: Colors.grey.shade300),
-                                borderRadius: BorderRadius.circular(10),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Row(
-                                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                    children: [
-                                      Text(name, style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.blue)),
-                                      Text(time, style: const TextStyle(fontSize: 12, color: Colors.black54)),
-                                    ],
-                                  ),
-                                  const SizedBox(height: 4),
-                                  if (status == 'Bình thường')
-                                    Container(
-                                      margin: const EdgeInsets.only(top: 4),
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                      decoration: BoxDecoration(
-                                        color: Colors.green,
-                                        borderRadius: BorderRadius.circular(5),
-                                      ),
-                                      child: const Text(
-                                        'Bình thường',
-                                        style: TextStyle(fontSize: 12, color: Colors.white ,),
-
-                                      ),
-                                    ),
-                                  const SizedBox(height: 5),
-                                  Text(message, style: const TextStyle(fontSize: 14, color: Colors.black87)),
-                                  const SizedBox(height: 6),
-                                  Align(
-                                    alignment: Alignment.centerLeft,
-                                    child: SizedBox(
-                                      height: 28,
-                                      child: ElevatedButton(
-                                        onPressed: isCreating
-                                            ? null
-                                            : () async {
-                                          final userId = comment['from']?['id'];
-                                          final name = comment['from']?['name'];
-                                          final avatarUrl = comment['from']?['picture']?['data']?['url'];
-                                          if (userId != null && name != null) {
-                                            setState(() => isCreating = true);
-                                            final facebookService = FacebookLiveService();
-                                            try {
-                                              final resultMessage = await facebookService.createOrderFromComment(
-                                                userId: userId,
-                                                name: name,
-                                                // avatarUrl: avatarUrl,
-                                                time: _formatVietnamTime(comment['created_time'] ?? ''),
-                                                message: comment['message'] ?? '',
-                                              );
-
-                                              await _loadComments(showLoading: false);
-
-                                              if (context.mounted) {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(content: Text(resultMessage)), // ✅ hiển thị theo tình huống
-                                                );
-                                              }
-                                            } finally {
-                                              setState(() => isCreating = false);
-                                            }
-
-                                          }
-                                        },
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.green,
-                                          padding: const EdgeInsets.symmetric(horizontal: 10),
-                                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8))
-                                        ),
-                                        child: isCreating
-                                            ? const SizedBox(
-                                          width: 16,
-                                          height: 16,
-                                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                                        )
-                                            : const Text("Tạo đơn", style: TextStyle(fontSize: 13)),
-                                      ),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    );
+                final comment = _pagedComments[index];
+                final userId = comment['from']?['id'] ?? '';
+                return CommentItem( // <-- SỬ DỤNG WIDGET MỚI
+                  comment: comment,
+                  isCreatingOrder: creatingOrders.contains(userId),
+                  formatTime: _formatVietnamTime,
+                  onFilterByUser: _filterCommentsByUser,
+                  onShowMoreOptions: () => _showCustomerInfoSheet(context, comment),
+                  onCreateOrder: () async {
+                    if (userId.isNotEmpty) {
+                      setState(() => creatingOrders.add(userId));
+                      try {
+                        await FacebookLiveService().createOrderFromComment(
+                          userId: userId,
+                          name: comment['from']?['name'] ?? '',
+                          time: _formatVietnamTime(comment['created_time'] ?? ''),
+                          message: comment['message'] ?? '',
+                        );
+                        await _loadComments(showLoading: false);
+                      } finally {
+                        setState(() => creatingOrders.remove(userId));
+                      }
+                    }
                   },
                 );
               },
@@ -326,3 +472,8 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
     );
   }
 }
+// Thêm 2 phương thức này vào trong class _CommentOnFacebookScreenState
+
+
+// Thêm Widget mới này vào cuối file comment_on_facebook.dart
+
