@@ -196,8 +196,8 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         TextField(controller: customerCodeController, decoration: const InputDecoration(labelText: "Customer Code")),
-        TextField(controller: keyController, decoration: const InputDecoration(labelText: "Key")),
-        TextField(controller: passwordController, decoration: const InputDecoration(labelText: "Password"), obscureText: true),
+        TextField(controller: keyController, decoration: const InputDecoration(labelText: "Key") , obscureText: true,),
+        // TextField(controller: passwordController, decoration: const InputDecoration(labelText: "Password"), obscureText: true),
         const SizedBox(height: 12),
         TextField(controller: nameController, decoration: const InputDecoration(labelText: "Tên người gửi")),
         TextField(controller: mobileController, decoration: const InputDecoration(labelText: "SĐT người gửi")),

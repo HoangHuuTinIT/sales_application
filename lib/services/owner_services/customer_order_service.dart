@@ -606,7 +606,7 @@ print('bizconten ne: $bizContentStr');
         "apiAccount": dotenv.env['API_ACCOUNT'] ?? "",
       };
 
-      final url = "https://demoopenapi.jtexpress.vn/webopenplatformapi/api/spmComCost/getComCost";
+      final url = "https://ylopenapi.jtexpress.vn/webopenplatformapi/api/spmComCost/getComCost";
       final response = await http.post(
         Uri.parse(url),
         headers: headers,

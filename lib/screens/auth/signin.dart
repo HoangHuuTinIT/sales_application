@@ -117,7 +117,7 @@ class _SignInScreenState extends State<SignInScreen> {
               child: Column(
                 children: const [
                   Text(
-                    'Chào mừng bạn!',
+                    'Hữu Tín Technology',
                     style: TextStyle(
                       fontSize: 22,
                       color: Colors.white,
@@ -125,8 +125,8 @@ class _SignInScreenState extends State<SignInScreen> {
                     ),
                   ),
                   Text(
-                    'Đến với Quân đoàn mua sắm',
-                    style: TextStyle(color: Colors.white70),
+                    'Chào mừng bạn!',
+                    style: TextStyle(color: Colors.white70, fontWeight: FontWeight.bold,fontSize: 20),
                   ),
                 ],
               ),
@@ -138,7 +138,7 @@ class _SignInScreenState extends State<SignInScreen> {
                   key: _formKey,
                   child: Column(
                     children: [
-                      Image.asset("assets/images/logo_quandoanmuasam.png", height: 100),
+                      Image.asset("assets/images/logo__app_support_seller_1.png", height: 150),
                       const SizedBox(height: 20),
                       TextFormField(
                         controller: emailController,
@@ -219,37 +219,37 @@ class _SignInScreenState extends State<SignInScreen> {
                         },
                       ),
                       const SizedBox(height: 12),
-                      ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Color(0xFF1877F2), // Màu Facebook
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                        ),
-                        icon: Image.asset(
-                          'assets/images/iconfb.png', // bạn cần thêm icon này vào assets
-                          height: 24,
-                        ),
-                        label: const Text('Đăng nhập bằng Facebook'),
-                        onPressed: () async {
-                          setState(() => isLoading = true);
-                          final error = await AuthService().signInWithFacebookAndCheckUserExists();
-                          setState(() => isLoading = false);
-                          if (!mounted) return;
-                          if (error != null) {
-                            message.showSnackbarfalse(context, error);
-                          } else {
-                            if (widget.redirectRoute != null) {
-                              Navigator.pushReplacementNamed(
-                                context,
-                                widget.redirectRoute!,
-                                arguments: widget.arguments,
-                              );
-                            } else {
-                              await AuthService().navigateUserByRole(context);
-                            }
-                          }
-                        },
-                      ),
+                      // ElevatedButton.icon(
+                      //   style: ElevatedButton.styleFrom(
+                      //     backgroundColor: Color(0xFF1877F2), // Màu Facebook
+                      //     foregroundColor: Colors.white,
+                      //     padding: const EdgeInsets.symmetric(vertical: 14),
+                      //   ),
+                      //   icon: Image.asset(
+                      //     'assets/images/iconfb.png', // bạn cần thêm icon này vào assets
+                      //     height: 24,
+                      //   ),
+                      //   label: const Text('Đăng nhập bằng Facebook'),
+                      //   onPressed: () async {
+                      //     setState(() => isLoading = true);
+                      //     final error = await AuthService().signInWithFacebookAndCheckUserExists();
+                      //     setState(() => isLoading = false);
+                      //     if (!mounted) return;
+                      //     if (error != null) {
+                      //       message.showSnackbarfalse(context, error);
+                      //     } else {
+                      //       if (widget.redirectRoute != null) {
+                      //         Navigator.pushReplacementNamed(
+                      //           context,
+                      //           widget.redirectRoute!,
+                      //           arguments: widget.arguments,
+                      //         );
+                      //       } else {
+                      //         await AuthService().navigateUserByRole(context);
+                      //       }
+                      //     }
+                      //   },
+                      // ),
 
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,

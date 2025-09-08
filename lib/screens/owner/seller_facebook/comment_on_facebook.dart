@@ -472,8 +472,3 @@ class _CommentOnFacebookScreenState extends State<CommentOnFacebookScreen> {
     );
   }
 }
-// Thêm 2 phương thức này vào trong class _CommentOnFacebookScreenState
-
-
-// Thêm Widget mới này vào cuối file comment_on_facebook.dart
-

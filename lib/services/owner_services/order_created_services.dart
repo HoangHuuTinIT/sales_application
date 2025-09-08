@@ -13,11 +13,8 @@ import 'package:http/http.dart' as http;
 import 'package:image/image.dart' as img;
 import 'package:intl/intl.dart';
 import 'package:ban_hang/screens/owner/order_management/shipping_itinerary.dart';
-
 import 'package:path_provider/path_provider.dart';
-
-
-
+import 'package:ban_hang/screens/owner/order_management/payment_screen.dart';
 class OrderCreatedServices {
   final _firestore = FirebaseFirestore.instance;
   final _auth = FirebaseAuth.instance;
@@ -79,7 +76,90 @@ class OrderCreatedServices {
     });
   }
 
+  Future<void> updateOrderStatusToCancelled(Map<String, dynamic> order, String reason) async {
+    try {
+      final docId = order["docId"];
+      if (docId == null) {
+        throw Exception("Lỗi: Không tìm thấy ID của đơn hàng để cập nhật.");
+      }
+      final orderRef = _firestore.collection("Order").doc(docId);
 
+      // Chỉ cập nhật trạng thái và thêm lý do hủy
+      await orderRef.update({
+        "status": "Hủy đơn",
+        "cancelReason": reason,
+        "cancelledAt": FieldValue.serverTimestamp(),
+      });
+
+    } catch (e) {
+      print("Lỗi khi cập nhật trạng thái hủy đơn: $e");
+      rethrow; // Ném lại lỗi để UI có thể xử lý
+    }
+  }
+
+  /// 🔹 Hiện dialog xác nhận hủy (đã được cập nhật)
+  Future<void> showCancelDialog(BuildContext context, Map<String, dynamic> order) async {
+    // Sửa lại lý do cho phù hợp với cả khách hàng và chủ shop
+    const defaultReason = "Đơn hàng đã được hủy";
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Xác nhận hủy đơn"),
+        // Sửa lại nội dung dialog
+        content: const Text("Bạn có chắc chắn muốn hủy đơn hàng này không?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Không"),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Có, hủy đơn"),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm != true) return;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      // Bước 1: Gọi API của J&T để hủy
+      final success = await cancelOrder(order, defaultReason);
+
+      if (success) {
+        // Bước 2: Nếu thành công, cập nhật status trong bảng Order
+        await updateOrderStatusToCancelled(order, defaultReason);
+
+        if (context.mounted) {
+          Navigator.pop(context); // Tắt loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Đã hủy đơn thành công")),
+          );
+        }
+      } else {
+        if (context.mounted) {
+          Navigator.pop(context); // Tắt loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Hủy đơn trên hệ thống giao hàng thất bại")),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        Navigator.pop(context); // Tắt loading
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Đã xảy ra lỗi: $e")),
+        );
+      }
+    }
+  }
   // MỚI: Phương thức xử lý tìm kiếm và lọc
   List<Map<String, dynamic>> filterAndSearchOrders({
     required List<Map<String, dynamic>> allOrders,
@@ -278,55 +358,55 @@ class OrderCreatedServices {
   }
 
   /// 🔹 Hiện dialog xác nhận hủy
-  Future<void> showCancelDialog(BuildContext context, Map<String, dynamic> order) async {
-    const defaultReason = "Hủy bởi người bán";
-    final confirm = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text("Xác nhận hủy đơn"),
-        content: const Text("Bạn có chắc chắn muốn hủy và xóa đơn này không?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text("Không"),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text("Có"),
-          ),
-        ],
-      ),
-    );
-
-    if (confirm == true) {
-      showDialog(
-        context: context,
-        barrierDismissible: false,
-        builder: (_) => const Center(child: CircularProgressIndicator()),
-      );
-
-      final success = await cancelOrder(order, defaultReason);
-
-      if (!context.mounted) return; // ⬅️ thêm dòng này
-
-      Navigator.pop(context); // tắt loading
-
-      if (success) {
-        await deleteOrder(order, defaultReason);
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Đã hủy và xóa đơn thành công")),
-          );
-        }
-      } else {
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text("Hủy đơn thất bại")),
-          );
-        }
-      }
-    }
-  }
+  // Future<void> showCancelDialog(BuildContext context, Map<String, dynamic> order) async {
+  //   const defaultReason = "Hủy bởi người bán";
+  //   final confirm = await showDialog<bool>(
+  //     context: context,
+  //     builder: (ctx) => AlertDialog(
+  //       title: const Text("Xác nhận hủy đơn"),
+  //       content: const Text("Bạn có chắc chắn muốn hủy và xóa đơn này không?"),
+  //       actions: [
+  //         TextButton(
+  //           onPressed: () => Navigator.pop(ctx, false),
+  //           child: const Text("Không"),
+  //         ),
+  //         ElevatedButton(
+  //           onPressed: () => Navigator.pop(ctx, true),
+  //           child: const Text("Có"),
+  //         ),
+  //       ],
+  //     ),
+  //   );
+  //
+  //   if (confirm == true) {
+  //     showDialog(
+  //       context: context,
+  //       barrierDismissible: false,
+  //       builder: (_) => const Center(child: CircularProgressIndicator()),
+  //     );
+  //
+  //     final success = await cancelOrder(order, defaultReason);
+  //
+  //     if (!context.mounted) return; // ⬅️ thêm dòng này
+  //
+  //     Navigator.pop(context); // tắt loading
+  //
+  //     if (success) {
+  //       await deleteOrder(order, defaultReason);
+  //       if (context.mounted) {
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //           const SnackBar(content: Text("Đã hủy và xóa đơn thành công")),
+  //         );
+  //       }
+  //     } else {
+  //       if (context.mounted) {
+  //         ScaffoldMessenger.of(context).showSnackBar(
+  //           const SnackBar(content: Text("Hủy đơn thất bại")),
+  //         );
+  //       }
+  //     }
+  //   }
+  // }
 
 
   /// 🔹 Hiện dialog xác nhận xóa
@@ -512,63 +592,237 @@ class OrderCreatedServices {
     return {'ip': ip, 'port': portNumber};
   }
 
-  /// [Hàm phụ 2] - Chuyển đổi PDF (dưới dạng bytes) thành đối tượng Image
-  // Future<img.Image> _convertPdfToImage(Uint8List pdfBytes) async {
-  //   // Mở tài liệu PDF từ dữ liệu byte
-  //   final document = await pdf.PdfDocument.openData(pdfBytes);
-  //   // Lấy trang đầu tiên (thường vận đơn chỉ có 1 trang)
-  //   final page = await document.getPage(1);
-  //
-  //   // Render trang PDF thành hình ảnh.
-  //   // Chiều rộng 512px là phổ biến cho máy in 80mm (khoảng 203 DPI)
-  //   final pageImage = await page.render(
-  //     width: 512,
-  //     // Tính toán chiều cao tương ứng để giữ đúng tỷ lệ
-  //     height: (page.height * 512 / page.width).round(),
-  //   );
-  //
-  //   // Dọn dẹp tài nguyên
-  //   await page.close();
-  //   await document.close();
-  //
-  //   if (pageImage == null) {
-  //     throw Exception("Không thể chuyển đổi PDF sang ảnh.");
-  //   }
-  //
-  //   // Giải mã dữ liệu byte của ảnh thành đối tượng Image có thể in được
-  //   final decodedImage = img.decodeImage(pageImage.bytes);
-  //   if (decodedImage == null) {
-  //     throw Exception('Không thể giải mã dữ liệu ảnh từ PDF.');
-  //   }
-  //
-  //   return decodedImage;
-  // }
 
 
-  /// [Hàm phụ 3] - Kết nối và gửi lệnh in hình ảnh đến máy in
-  Future<void> _printImageOverNetwork(String ip, int port, img.Image image) async {
-    // Sử dụng khổ giấy 80mm như yêu cầu
-    const PaperSize paper = PaperSize.mm80;
-    final profile = await CapabilityProfile.load();
-    final printer = NetworkPrinter(paper, profile);
+  Future<void> processAndSavePayment({
+    required BuildContext context,
+    required Map<String, dynamic> order,
+    required PaymentOption paymentOption,
+    double? partialAmount,
+    String? reason,
+  }) async {
+    final shopId = order['shopid'];
+    if (shopId == null || shopId.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Lỗi: Không tìm thấy ID của shop!")),
+      );
+      return;
+    }
 
-    // Kết nối đến máy in với timeout 5 giây
-    final PosPrintResult res = await printer.connect(ip, port: port, timeout: const Duration(seconds: 5));
+    // Sử dụng Transaction để đảm bảo tính toàn vẹn dữ liệu
+    await _firestore.runTransaction((transaction) async {
+      // --- BƯỚC 1: Chuẩn bị dữ liệu cho bảng Products_sold ---
+      Map<String, dynamic> dataToSave = Map.from(order);
 
-    if (res == PosPrintResult.success) {
-      // In hình ảnh đã được chuyển đổi
-      printer.image(image, align: PosAlign.center);
-      // Đẩy giấy lên vài dòng cho dễ xé
-      printer.feed(2);
-      // Cắt giấy
-      printer.cut();
-      // Ngắt kết nối
-      printer.disconnect();
-    } else {
-      // Nếu kết nối thất bại, báo lỗi
-      throw Exception('Không thể kết nối đến máy in: ${res.msg}');
+      if (paymentOption == PaymentOption.partial) {
+        dataToSave['totalAmount'] = partialAmount ?? 0;
+      } else {
+        dataToSave['totalAmount'] = order['totalAmount'];
+      }
+
+      dataToSave['reason'] = reason ?? "";
+      dataToSave['payment_date'] = FieldValue.serverTimestamp();
+
+      dataToSave.remove('docId');
+      dataToSave.remove('createdByName');
+      dataToSave.remove('invoiceDateRaw');
+
+      // Tạo tham chiếu để lưu đơn hàng đã bán
+      final soldOrderRef = _firestore
+          .collection('Products_sold')
+          .doc(shopId)
+          .collection('sales')
+          .doc(); // Tạo doc mới với ID tự động
+
+      // Thêm thao tác lưu vào transaction
+      transaction.set(soldOrderRef, dataToSave);
+
+      // --- BƯỚC 2: Cập nhật trạng thái của đơn hàng gốc trong bảng Order ---
+      final originalOrderRef = _firestore.collection('Order').doc(order['docId']);
+      transaction.update(originalOrderRef, {'status': 'Đã thanh toán'});
+
+      // --- BƯỚC 3: Cập nhật tồn kho và số lượng đã bán cho từng sản phẩm ---
+      final List<dynamic> items = order['items'] ?? [];
+      for (var item in items) {
+        final productId = item['productId'];
+        final quantitySold = item['quantity'];
+
+        if (productId != null && quantitySold != null) {
+          // Tạo tham chiếu đến sản phẩm trong bảng Products
+          final productRef = _firestore.collection('Products').doc(productId);
+
+          // Thêm thao tác cập nhật sản phẩm vào transaction
+          transaction.update(productRef, {
+            // Giảm tồn kho đi số lượng đã bán
+            'stockQuantity': FieldValue.increment(-quantitySold),
+            // Tăng số lượng đã bán lên
+            'sold': FieldValue.increment(quantitySold),
+          });
+        }
+      }
+    }).then((_) {
+      // Khi tất cả các thao tác trong transaction thành công
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Xác nhận thanh toán và cập nhật kho thành công!")),
+        );
+      }
+    }).catchError((error) {
+      // Khi có bất kỳ lỗi nào xảy ra, tất cả thao tác sẽ được hoàn tác
+      print("Lỗi transaction khi thanh toán: $error");
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Đã xảy ra lỗi: $error")),
+        );
+      }
+    });
+  }
+  List<PopupMenuEntry<String>> buildMenuItems(String status) {
+    // Kiểm tra xem đơn có bị hủy hay không
+    final isCancelled = (status == 'Hủy đơn');
+
+    return [
+      // Mục "Thanh toán" - Bị vô hiệu hóa nếu đơn đã hủy
+      PopupMenuItem(
+        value: "payment",
+        enabled: !isCancelled, // enabled = false sẽ làm mờ mục này
+        child: Text(
+          "Thanh toán",
+          style: TextStyle(color: isCancelled ? Colors.grey : Colors.black),
+        ),
+      ),
+      const PopupMenuDivider(),
+
+      // Mục "Hủy đơn" - Bị vô hiệu hóa nếu đơn đã hủy
+      PopupMenuItem(
+        value: "cancel",
+        enabled: !isCancelled,
+        child: Text(
+          "Hủy đơn",
+          style: TextStyle(color: isCancelled ? Colors.grey : Colors.black),
+        ),
+      ),
+
+      // Các mục còn lại luôn được bật
+      const PopupMenuItem(
+        value: "delete",
+        child: Text("Xóa đơn"),
+      ),
+      const PopupMenuItem(
+        value: "trace",
+        child: Text("Tra hành trình"),
+      ),
+      const PopupMenuItem(
+        value: "copy_customer",
+        child: Text("Copy thông tin khách hàng"),
+      ),
+      const PopupMenuItem(
+        value: "copy_cod",
+        child: Text("Copy số tiền COD"),
+      ),
+      const PopupMenuItem(
+        value: "print",
+        child: Text("In vận đơn"),
+      ),
+    ];
+  }
+  Future<void> handleMenuSelection(BuildContext context, String value, Map<String, dynamic> order) async {
+    // Di chuyển toàn bộ logic từ onSelected của UI vào đây
+    if (value == "print") {
+      if (order["shippingPartner"] == "J&T") {
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (_) => const Center(child: CircularProgressIndicator()),
+        );
+        try {
+          final result = await printOrderJT(order);
+          Navigator.pop(context); // tắt loading
+
+          if (result != null) {
+            final jsonResult = jsonDecode(result);
+            if (jsonResult["code"] == "1") {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Đã gửi vận đơn đến máy in")),
+                );
+              }
+            } else {
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text("In thất bại: ${jsonResult["msg"]}")),
+                );
+              }
+            }
+          } else {
+            if (context.mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Không in được vận đơn J&T")),
+              );
+            }
+          }
+        } catch (e) {
+          if (context.mounted) {
+            Navigator.pop(context);
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text("Lỗi in vận đơn: $e")),
+            );
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text("Đơn vị này chưa hỗ trợ in vận đơn")),
+        );
+      }
+    } else if (value == "cancel") {
+      await showCancelDialog(context, order);
+    } else if (value == "delete") {
+      await showDeleteDialog(context, order);
+    } else if (value == "trace") {
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (context) => const Center(child: CircularProgressIndicator()),
+      );
+      try {
+        final result = await traceOrderJT(order);
+        if (result != null && context.mounted) {
+          Navigator.pop(context); // Tắt loading
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ShippingItineraryScreen(response: result),
+            ),
+          );
+        } else {
+          if (context.mounted) {
+            Navigator.pop(context); // Tắt loading
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text("Không tìm thấy hành trình")),
+            );
+          }
+        }
+      } catch (e) {
+        if (context.mounted) {
+          Navigator.pop(context); // Tắt loading
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text("Lỗi tra hành trình: $e")),
+          );
+        }
+      }
+    } else if (value == "copy_customer") {
+      final info =
+          "${order["customerName"]} - ${order["customerPhone"]} - ${order["shippingAddress"]}";
+      await copyToClipboard(context, info, "Đã copy thông tin khách hàng");
+    } else if (value == "copy_cod") {
+      await copyToClipboard(context, "${order["codAmount"] ?? "0"}", "Đã copy số tiền COD");
+    } else if (value == "payment") {
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => PaymentScreen(order: order),
+        ),
+      );
     }
   }
-
-
 }

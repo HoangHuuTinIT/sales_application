@@ -1,12 +1,11 @@
 import 'dart:convert';
-
 import 'package:ban_hang/screens/owner/order_management/shipping_itinerary.dart';
 import 'package:ban_hang/services/owner_services/order_created_services.dart';
 import 'package:ban_hang/utils/message.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
-
+import 'package:ban_hang/screens/owner/order_management/payment_screen.dart';
 class OrderCreatedScreen extends StatefulWidget {
   const OrderCreatedScreen({super.key});
 
@@ -338,132 +337,9 @@ class _OrderCreatedScreenState extends State<OrderCreatedScreen> {
                                   // PopupMenu
                                   PopupMenuButton<String>(
                                     onSelected: (value) async {
-                                      final services = OrderCreatedServices();
-                                      if (value == "print") {
-                                        if (order["shippingPartner"] == "J&T") {
-                                          showDialog(
-                                            context: context,
-                                            barrierDismissible: false,
-                                            builder: (_) => const Center(
-                                                child: CircularProgressIndicator()),
-                                          );
-                                          try {
-                                            final result =
-                                            await services.printOrderJT(order);
-                                            Navigator.pop(context); // tắt loading
-
-                                            if (result != null) {
-                                              final jsonResult = jsonDecode(result);
-
-                                              if (jsonResult["code"] == "1") {
-                                                final base64Str =
-                                                jsonResult["data"]["base64EncodeContent"];
-                                                if (context.mounted) {
-                                                  ScaffoldMessenger.of(context)
-                                                      .showSnackBar(
-                                                    const SnackBar(
-                                                        content: Text(
-                                                            "Đã gửi vận đơn đến máy in")),
-                                                  );
-                                                }
-                                              } else {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(
-                                                      content: Text(
-                                                          "In thất bại: ${jsonResult["msg"]}")),
-                                                );
-                                              }
-                                            } else {
-                                              ScaffoldMessenger.of(context).showSnackBar(
-                                                const SnackBar(
-                                                    content: Text(
-                                                        "Không in được vận đơn J&T")),
-                                              );
-                                            }
-                                          } catch (e) {
-                                            Navigator.pop(context);
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              SnackBar(
-                                                  content: Text("Lỗi in vận đơn: $e")),
-                                            );
-                                          }
-                                        } else {
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            const SnackBar(
-                                                content:
-                                                Text("Đơn vị này chưa hỗ trợ in vận đơn")),
-                                          );
-                                        }
-                                      }
-                                      if (value == "cancel") {
-                                        await services.showCancelDialog(context, order);
-                                      } else if (value == "delete") {
-                                        await services.showDeleteDialog(context, order);
-                                      } else if (value == "trace") {
-                                        showDialog(
-                                          context: context,
-                                          barrierDismissible: false,
-                                          builder: (context) {
-                                            return const Center(
-                                              child: CircularProgressIndicator(),
-                                            );
-                                          },
-                                        );
-                                        try {
-                                          final result =
-                                          await services.traceOrderJT(order);
-                                          if (result != null && context.mounted) {
-                                            Navigator.pop(context); // Tắt loading
-                                            Navigator.push(
-                                              context,
-                                              MaterialPageRoute(
-                                                builder: (_) => ShippingItineraryScreen(
-                                                    response: result),
-                                              ),
-                                            );
-                                          } else {
-                                            Navigator.pop(context); // Tắt loading
-                                            ScaffoldMessenger.of(context).showSnackBar(
-                                              const SnackBar(
-                                                  content:
-                                                  Text("Không tìm thấy hành trình")),
-                                            );
-                                          }
-                                        } catch (e) {
-                                          Navigator.pop(context); // Tắt loading nếu lỗi
-                                          ScaffoldMessenger.of(context).showSnackBar(
-                                            SnackBar(
-                                                content: Text("Lỗi tra hành trình: $e")),
-                                          );
-                                        }
-                                      } else if (value == "copy_customer") {
-                                        final info =
-                                            "${order["customerName"]} - ${order["customerPhone"]} - ${order["shippingAddress"]}";
-                                        await services.copyToClipboard(
-                                            context, info, "Đã copy thông tin khách hàng");
-                                      } else if (value == "copy_cod") {
-                                        await services.copyToClipboard(
-                                            context,
-                                            "${order["codAmount"] ?? "0"}",
-                                            "Đã copy số tiền COD");
-                                      }
+                                      _services.handleMenuSelection(context, value, order);
                                     },
-                                    itemBuilder: (context) => const [
-                                      PopupMenuItem(
-                                          value: "cancel", child: Text("Hủy đơn")),
-                                      PopupMenuItem(
-                                          value: "delete", child: Text("Xóa đơn")),
-                                      PopupMenuItem(
-                                          value: "trace", child: Text("Tra hành trình")),
-                                      PopupMenuItem(
-                                          value: "copy_customer",
-                                          child: Text("Copy thông tin khách hàng")),
-                                      PopupMenuItem(
-                                          value: "copy_cod",
-                                          child: Text("Copy số tiền COD")),
-                                      PopupMenuItem(
-                                          value: "print", child: Text("In vận đơn")),
-                                    ],
+                                    itemBuilder: (context) => _services.buildMenuItems(order['status'] ?? ''),
                                   )
                                 ],
                               ),

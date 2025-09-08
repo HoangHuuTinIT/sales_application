@@ -298,22 +298,26 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
             // Nút đăng ký Google
             ElevatedButton.icon(
-              onPressed: _handleGoogleSignUp,
-              icon: const Icon(Icons.account_circle),
-              label: const Text("Đăng ký bằng Google"),
-            ),
 
+              onPressed: _handleGoogleSignUp,
+              icon: Image.asset(
+                'assets/images/logo_google.png',
+                height: 24,
+              ),
+              label: const Text("Đăng ký bằng Google"),
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.white , foregroundColor: Colors.black),
+            ),
             const SizedBox(height: 12),
 
             // Nút đăng ký Facebook
-            ElevatedButton.icon(
-              onPressed: _handleFacebookSignUp,
-              icon: const Icon(Icons.facebook, color: Colors.white),
-              label: const Text("Đăng ký bằng Facebook"),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.blue[800],
-              ),
-            ),
+            // ElevatedButton.icon(
+            //   onPressed: _handleFacebookSignUp,
+            //   icon: const Icon(Icons.facebook, color: Colors.white),
+            //   label: const Text("Đăng ký bằng Facebook"),
+            //   style: ElevatedButton.styleFrom(
+            //     backgroundColor: Colors.blue[800],
+            //   ),
+            // ),
           ],
         ),
       ),

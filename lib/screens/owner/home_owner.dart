@@ -93,44 +93,44 @@ class HomeOwnerScreen extends StatelessWidget {
                     Navigator.pushNamed(context, '/facebook-sales');
                   },
                 ),
-                _buildSection(
-                  context,
-                  icon: Icons.manage_accounts,
-                  title: 'Quản lý tài khoản',
-                  onTap: () => showModalBottomSheet(
-                    context: context,
-                    builder: (_) => Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        ListTile(
-                          leading: const Icon(Icons.check_circle),
-                          title: const Text('Xét duyệt tài khoản'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.push(context,
-                                MaterialPageRoute(builder: (_) => const ApprovalAccountScreen()));
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.edit),
-                          title: const Text('Chỉnh sửa tài khoản'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.pushNamed(context, '/edit-accounts');
-                          },
-                        ),
-                        ListTile(
-                          leading: const Icon(Icons.person_add),
-                          title: const Text('Cấp tài khoản quản lý'),
-                          onTap: () {
-                            Navigator.pop(context);
-                            Navigator.pushNamed(context, '/create-management-account');
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
+                // _buildSection(
+                //   context,
+                //   icon: Icons.manage_accounts,
+                //   title: 'Quản lý tài khoản',
+                //   onTap: () => showModalBottomSheet(
+                //     context: context,
+                //     builder: (_) => Column(
+                //       mainAxisSize: MainAxisSize.min,
+                //       children: [
+                //         ListTile(
+                //           leading: const Icon(Icons.check_circle),
+                //           title: const Text('Xét duyệt tài khoản'),
+                //           onTap: () {
+                //             Navigator.pop(context);
+                //             Navigator.push(context,
+                //                 MaterialPageRoute(builder: (_) => const ApprovalAccountScreen()));
+                //           },
+                //         ),
+                //         ListTile(
+                //           leading: const Icon(Icons.edit),
+                //           title: const Text('Chỉnh sửa tài khoản'),
+                //           onTap: () {
+                //             Navigator.pop(context);
+                //             Navigator.pushNamed(context, '/edit-accounts');
+                //           },
+                //         ),
+                //         ListTile(
+                //           leading: const Icon(Icons.person_add),
+                //           title: const Text('Cấp tài khoản quản lý'),
+                //           onTap: () {
+                //             Navigator.pop(context);
+                //             Navigator.pushNamed(context, '/create-management-account');
+                //           },
+                //         ),
+                //       ],
+                //     ),
+                //   ),
+                // ),
                 _buildSection(
                   context,
                   icon: Icons.receipt_long,

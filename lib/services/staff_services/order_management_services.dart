@@ -95,13 +95,15 @@ class OrderManagementService {
         final productData = productDoc.data() ?? {};
 
         products.add({
+          'id': p['productId'], // QUAN TRỌNG: Thêm dòng này để chuẩn hóa dữ liệu
+          'productId': p['productId'], // Bạn cũng có thể thêm cả key này để chắc chắn
           'name': p['productName'],
           'price': (p['price'] ?? 0).toDouble(),
           'quantity': p['quantity'] ?? 0,
-          'stockQuantity': productData['stockQuantity'] ?? 0, // ✅ từ Products
-          'weight': (productData['weight'] ?? 0).toDouble(), // ✅ từ Products
+          'stockQuantity': productData['stockQuantity'] ?? 0,
+          'weight': (productData['weight'] ?? 0).toDouble(),
           'total': (p['total'] ?? 0).toDouble(),
-          'imageUrls': productData['imageUrls'] ?? [], // ✅ ảnh sản phẩm
+          'imageUrls': productData['imageUrls'] ?? [],
         });
       }
 

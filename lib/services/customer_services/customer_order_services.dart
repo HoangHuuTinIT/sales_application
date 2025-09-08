@@ -14,6 +14,8 @@ class CustomerOrderService {
     return _firestore
         .collection('Order')
         .where('customerId', isEqualTo: user.uid)
+    // Thêm điều kiện lọc: status KHÔNG NẰM TRONG danh sách ['Đã thanh toán', 'Hủy đơn']
+        .where('status', whereNotIn: ['Đã thanh toán', 'Hủy đơn'])
         .orderBy('invoiceDate', descending: true)
         .snapshots();
   }

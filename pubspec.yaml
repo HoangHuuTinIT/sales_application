@@ -120,6 +120,7 @@ flutter:
     - assets/images/iconfb.png
     - .env
     - assets/json/mapping_J&T_address.json
+    - assets/images/logo__app_support_seller_1.png
 
   # To add assets to your application, add an assets section, like this:
   # assets:

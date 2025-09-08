@@ -1,3 +1,4 @@
+import 'package:ban_hang/services/owner_services/order_created_services.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // để dùng Clipboard
 import 'package:ban_hang/services/customer_services/customer_order_services.dart';
@@ -14,6 +15,7 @@ class CustomerOrderScreen extends StatefulWidget {
 
 class _CustomerOrderScreenState extends State<CustomerOrderScreen> {
   final CustomerOrderService _orderService = CustomerOrderService();
+  final OrderCreatedServices _ownerOrderService = OrderCreatedServices();
 
   void _showOrderItems(String orderId) async {
     final items = await _orderService.getOrderItems(orderId);
@@ -86,6 +88,11 @@ class _CustomerOrderScreenState extends State<CustomerOrderScreen> {
             itemBuilder: (context, index) {
               final doc = orders[index];
               final data = doc.data();
+              final Map<String, dynamic> orderDataForCancel = {
+                ...data,
+                'docId': doc.id, // Rất quan trọng: phải có docId
+              };
+
               final txlogisticId = data['txlogisticId'] ?? '';
               final billCode = data['billCode'] ?? '';
               final status = data['status'] ?? '';
@@ -126,6 +133,9 @@ class _CustomerOrderScreenState extends State<CustomerOrderScreen> {
                             onSelected: (value) {
                               if (value == 'items') {
                                 _showOrderItems(doc.id);
+                              } else if (value == 'cancel') {
+                                // Dòng này đã đúng, nó sẽ gọi đến hàm showCancelDialog đã được cập nhật ở trên
+                                _ownerOrderService.showCancelDialog(context, orderDataForCancel);
                               }
                             },
                             itemBuilder: (context) => [
@@ -133,6 +143,11 @@ class _CustomerOrderScreenState extends State<CustomerOrderScreen> {
                                 value: 'items',
                                 child: Text('Chi tiết sản phẩm'),
                               ),
+                              if (status != "Hủy đơn")
+                                const PopupMenuItem(
+                                  value: 'cancel',
+                                  child: Text('Hủy đơn'),
+                                ),
                             ],
                           ),
                         ],
