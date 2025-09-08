@@ -1,6 +1,8 @@
 import 'package:ban_hang/screens/customer/verify_phone_number.dart';
 import 'package:ban_hang/services/auth_services/auth_service.dart';
+import 'package:ban_hang/services/utilities/utilities_address.dart';
 import 'package:ban_hang/utils/message.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:form_field_validator/form_field_validator.dart';
@@ -26,13 +28,13 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
   final nameController = TextEditingController();
   final detailAddressController = TextEditingController();
 
-  List<Province> provinces = [];
-  List<District> districts = [];
-  List<Ward> wards = [];
+  List<String> provinces = [];
+  List<String> districts = [];
+  List<String> wards = [];
 
-  Province? selectedProvince;
-  District? selectedDistrict;
-  Ward? selectedWard;
+  String? selectedProvince;
+  String? selectedDistrict;
+  String? selectedWard;
   String? selectedGender;
 
   bool isLoading = false;
@@ -40,18 +42,19 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
   @override
   void initState() {
     super.initState();
-    AuthService().initLocations().then((_) {
-      provinces = AuthService().getProvinces();
-      if (widget.initialData != null) {
-        nameController.text = widget.initialData?['name'] ?? '';
-      }
-      setState(() {});
-    });
+    // Lấy danh sách tỉnh trực tiếp từ AddressUtils
+    provinces = AddressUtils.getProvinces();
+    if (widget.initialData != null) {
+      nameController.text = widget.initialData?['name'] ?? '';
+    }
   }
 
   void _handleSignUp() async {
-    if (!_formKey.currentState!.validate() ||
-        selectedProvince == null ||
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    if (selectedProvince == null ||
         selectedDistrict == null ||
         selectedWard == null ||
         selectedGender == null) {
@@ -70,23 +73,23 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
     final avatarUrl = widget.initialData?['avatarUrl'] ?? '';
     final email = widget.initialData?['email'] ?? FirebaseAuth.instance.currentUser?.email;
 
-
     if (email == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Không tìm thấy email Google')),
+        const SnackBar(content: Text('Không tìm thấy email')),
       );
       return;
     }
 
     setState(() => isLoading = true);
 
+    // Sử dụng các biến String trực tiếp, không cần .name
     final errorMessage = await AuthService().completeFacebookSignup(
       name: nameController.text.trim(),
       email: email,
       phone: message.formatVNPhone(verifiedPhone),
-      province: selectedProvince!.name,
-      district: selectedDistrict!.name,
-      ward: selectedWard!.name,
+      province: selectedProvince!,
+      district: selectedDistrict!,
+      ward: selectedWard!,
       gender: selectedGender!,
       detailAddress: detailAddressController.text.trim(),
       avatarUrl: avatarUrl,
@@ -98,13 +101,16 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Đăng ký thành công')),
       );
-      await AuthService().navigateUserByRole(context);
+      if (mounted) {
+        await AuthService().navigateUserByRole(context);
+      }
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Lỗi: $errorMessage')),
       );
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -146,61 +152,92 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                DropdownButtonFormField<Province>(
-                  value: selectedProvince,
-                  items: provinces
-                      .map((p) =>
-                      DropdownMenuItem(value: p, child: Text(p.name)))
-                      .toList(),
-                  decoration: const InputDecoration(labelText: 'Tỉnh/Thành phố'),
-                  onChanged: (p) {
+                DropdownSearch<String>(
+                  popupProps: const PopupProps.menu(
+                      showSearchBox: true,
+                      searchFieldProps: TextFieldProps(decoration: InputDecoration(labelText: "Tìm kiếm tỉnh/thành"))
+                  ),
+                  items: provinces,
+                  selectedItem: selectedProvince,
+                  dropdownDecoratorProps: const DropDownDecoratorProps(
+                    dropdownSearchDecoration: InputDecoration(
+                      labelText: "Tỉnh/Thành phố",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  onChanged: (value) {
                     setState(() {
-                      selectedProvince = p;
+                      selectedProvince = value;
                       selectedDistrict = null;
                       selectedWard = null;
-                      districts = AuthService().getDistricts(p!.code);
+                      districts = value != null ? AddressUtils.getDistricts(value) : [];
                       wards = [];
                     });
                   },
+                  validator: (value) => value == null ? 'Vui lòng chọn tỉnh/thành' : null,
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<District>(
-                  value: selectedDistrict,
-                  items: districts
-                      .map((d) =>
-                      DropdownMenuItem(value: d, child: Text(d.name)))
-                      .toList(),
-                  decoration: const InputDecoration(labelText: 'Quận/Huyện'),
-                  onChanged: (d) {
+                const SizedBox(height: 16),
+
+                // Quận/Huyện
+                DropdownSearch<String>(
+                  popupProps: const PopupProps.menu(
+                      showSearchBox: true,
+                      searchFieldProps: TextFieldProps(decoration: InputDecoration(labelText: "Tìm kiếm quận/huyện"))
+                  ),
+                  items: districts,
+                  selectedItem: selectedDistrict,
+                  enabled: selectedProvince != null,
+                  dropdownDecoratorProps: const DropDownDecoratorProps(
+                    dropdownSearchDecoration: InputDecoration(
+                      labelText: "Quận/Huyện",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  onChanged: (value) {
                     setState(() {
-                      selectedDistrict = d;
+                      selectedDistrict = value;
                       selectedWard = null;
-                      wards = AuthService()
-                          .getWards(selectedProvince!.code, d!.code);
+                      wards = (selectedProvince != null && value != null)
+                          ? AddressUtils.getWards(selectedProvince!, value)
+                          : [];
                     });
                   },
+                  validator: (value) => value == null ? 'Vui lòng chọn quận/huyện' : null,
                 ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<Ward>(
-                  value: selectedWard,
-                  items: wards
-                      .map((w) =>
-                      DropdownMenuItem(value: w, child: Text(w.name)))
-                      .toList(),
-                  decoration: const InputDecoration(labelText: 'Phường/Xã'),
-                  onChanged: (w) => setState(() => selectedWard = w),
+                const SizedBox(height: 16),
+
+                // Phường/Xã
+                DropdownSearch<String>(
+                  popupProps: const PopupProps.menu(
+                      showSearchBox: true,
+                      searchFieldProps: TextFieldProps(decoration: InputDecoration(labelText: "Tìm kiếm phường/xã"))
+                  ),
+                  items: wards,
+                  selectedItem: selectedWard,
+                  enabled: selectedDistrict != null,
+                  itemAsString: (item) => item?.split('-').first ?? '', // Chỉ hiển thị tên
+                  dropdownDecoratorProps: const DropDownDecoratorProps(
+                    dropdownSearchDecoration: InputDecoration(
+                      labelText: "Phường/Xã",
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                  onChanged: (value) {
+                    setState(() => selectedWard = value);
+                  },
+                  validator: (value) => value == null ? 'Vui lòng chọn phường/xã' : null,
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
                 TextFormField(
                   controller: detailAddressController,
-                  validator:
-                  RequiredValidator(errorText: 'Không được để trống'),
+                  validator: RequiredValidator(errorText: 'Không được để trống'),
                   decoration: const InputDecoration(
-                    labelText: 'Địa chỉ chi tiết',
+                    labelText: 'Địa chỉ chi tiết (số nhà, tên đường...)',
                     prefixIcon: Icon(Icons.home),
+                    border: OutlineInputBorder(),
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 24),
                 ElevatedButton(
                   onPressed: isLoading ? null : _handleSignUp,
                   child: isLoading
@@ -211,7 +248,7 @@ class _SignUpInformationScreenState extends State<SignUpInformationScreen> {
             ),
           ),
         ),
-      ),
+      ), 
     );
   }
 }

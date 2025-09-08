@@ -1,11 +1,12 @@
 import 'dart:io';
 import 'package:ban_hang/services/customer_services/customer_account_information_services.dart';
+import 'package:ban_hang/services/utilities/utilities_address.dart';
 import 'package:ban_hang/utils/message.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:dropdown_search/dropdown_search.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:vietnam_provinces/vietnam_provinces.dart';
 
 class CustomerAccountInformationScreen extends StatefulWidget {
   const CustomerAccountInformationScreen({super.key});
@@ -23,15 +24,14 @@ class _CustomerAccountInformationScreenState
   final phoneController = TextEditingController();
   final detailAddressController = TextEditingController();
 
-  Province? selectedProvince;
-  District? selectedDistrict;
-  Ward? selectedWard;
+  String? selectedProvince;
+  String? selectedDistrict;
+  String? selectedWard;
   String? gender;
 
-  List<Province> provinces = [];
-  List<District> districts = [];
-  List<Ward> wards = [];
-
+  List<String> provinces = []; // <-- Phải là List<String>
+  List<String> districts = []; // <-- Phải là List<String>
+  List<String> wards = [];
   String? _imageUrl; // ảnh đang dùng
   File? _pickedImageFile; // ảnh tạm thời
 
@@ -40,57 +40,55 @@ class _CustomerAccountInformationScreenState
   @override
   void initState() {
     super.initState();
-    VietnamProvinces.initialize().then((_) {
-      provinces = VietnamProvinces.getProvinces();
-      _loadUserData();
-    });
+    provinces = AddressUtils.getProvinces();
+    _loadUserData();
   }
+
 
   Future<void> _loadUserData() async {
     final user = _auth.currentUser;
     if (user == null) return;
 
-    final doc = await FirebaseFirestore.instance
-        .collection('users')
-        .doc(user.uid)
-        .get();
+    final doc =
+    await FirebaseFirestore.instance.collection('users').doc(user.uid).get();
     final data = doc.data();
     if (data == null) return;
 
-    nameController.text = data['name'] ?? '';
-    emailController.text = data['email'] ?? '';
-    phoneController.text = data['phone'] ?? '';
-    gender = data['gender'] ?? '';
-    _imageUrl = data['avatarUrl'];
+    setState(() {
+      nameController.text = data['name'] ?? '';
+      emailController.text = data['email'] ?? '';
+      phoneController.text = data['phone'] ?? '';
+      gender = data['gender'] ?? '';
+      _imageUrl = data['avatarUrl'];
 
-    final address = data['address'] ?? '';
-    final parts = address.split(' - ');
-    if (parts.isNotEmpty) detailAddressController.text = parts[0];
+      final address = data['address'] as String? ?? '';
 
-    if (parts.length >= 4) {
-      final wardName = parts[1].replaceFirst('Xã ', '');
-      final districtName = parts[2].replaceFirst('Huyện ', '');
-      final provinceName = parts[3].replaceFirst('Tỉnh ', '');
+      // Sử dụng AddressUtils để phân tích địa chỉ
+      final parsedAddress = AddressUtils.parseFullAddress(address);
 
-      selectedProvince = provinces.firstWhere(
-              (p) => p.name == provinceName,
-          orElse: () => provinces.first);
-      districts = VietnamProvinces.getDistricts(
-          provinceCode: selectedProvince!.code);
+      if (parsedAddress.isNotEmpty) {
+        detailAddressController.text = parsedAddress['addressDetail'] ?? '';
+        selectedProvince = parsedAddress['province'];
 
-      selectedDistrict = districts.firstWhere(
-              (d) => d.name == districtName,
-          orElse: () => districts.first);
-      wards = VietnamProvinces.getWards(
-        provinceCode: selectedProvince!.code,
-        districtCode: selectedDistrict!.code,
-      );
-      selectedWard = wards.firstWhere((w) => w.name == wardName,
-          orElse: () => wards.first);
-    }
+        if (selectedProvince != null) {
+          // --- BỎ ÉP KIỂU SAI ---
+          districts = AddressUtils.getDistricts(selectedProvince!);
+          selectedDistrict = parsedAddress['district'];
+        }
 
-    setState(() {});
+        if (selectedProvince != null && selectedDistrict != null) {
+          // --- BỎ ÉP KIỂU SAI ---
+          wards = AddressUtils.getWards(selectedProvince!, selectedDistrict!);
+          selectedWard = AddressUtils.findWardByName(
+            province: selectedProvince!,
+            district: selectedDistrict!,
+            wardName: parsedAddress['ward'] ?? '',
+          );
+        }
+      }
+    });
   }
+
 
   Future<void> _pickImage() async {
     final file =
@@ -130,9 +128,7 @@ class _CustomerAccountInformationScreenState
   }
 
   Future<void> _handleSave() async {
-    setState(() {
-      isLoading = true;
-    });
+    setState(() { isLoading = true; });
 
     String? finalAvatarUrl = _imageUrl;
 
@@ -144,12 +140,13 @@ class _CustomerAccountInformationScreenState
       }
     }
 
+    // Logic lưu không đổi, vì service đã nhận vào là String
     await CustomerAccountInformationServices().updateAccountInfo(
       name: nameController.text.trim(),
       gender: gender ?? '',
-      province: selectedProvince?.name ?? '',
-      district: selectedDistrict?.name ?? '',
-      ward: selectedWard?.name ?? '',
+      province: selectedProvince ?? '',
+      district: selectedDistrict ?? '',
+      ward: selectedWard ?? '', // Gửi cả mã nếu có
       detailAddress: detailAddressController.text.trim(),
     );
 
@@ -159,9 +156,7 @@ class _CustomerAccountInformationScreenState
         await FirebaseFirestore.instance
             .collection('users')
             .doc(user.uid)
-            .update({
-          'avatarUrl': finalAvatarUrl,
-        });
+            .update({'avatarUrl': finalAvatarUrl});
       }
     }
 
@@ -177,6 +172,7 @@ class _CustomerAccountInformationScreenState
       _imageUrl = finalAvatarUrl;
     });
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -263,58 +259,114 @@ class _CustomerAccountInformationScreenState
               ),
             ),
             const SizedBox(height: 12),
-            DropdownButtonFormField<Province>(
-              value: selectedProvince,
-              items: provinces
-                  .map((p) =>
-                  DropdownMenuItem(value: p, child: Text(p.name)))
-                  .toList(),
-              decoration:
-              const InputDecoration(labelText: 'Tỉnh/Thành phố'),
-              onChanged: (p) {
+            DropdownSearch<String>(
+              popupProps: const PopupProps.menu(
+                showSearchBox: true,
+                searchFieldProps: TextFieldProps(
+                  decoration: InputDecoration(
+                    labelText: "Tìm kiếm",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                menuProps: MenuProps(
+                  backgroundColor: Colors.white,
+                ),
+              ),
+              items: provinces,
+              selectedItem: selectedProvince,
+              dropdownDecoratorProps: const DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(
+                  labelText: "Tỉnh/Thành phố",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              onChanged: (province) {
                 setState(() {
-                  selectedProvince = p;
+                  selectedProvince = province;
                   selectedDistrict = null;
                   selectedWard = null;
-                  districts = VietnamProvinces.getDistricts(
-                      provinceCode: p!.code);
+                  districts = (province != null) ? AddressUtils.getDistricts(province) : [];
+                  wards = [];
                 });
               },
             ),
+
             const SizedBox(height: 12),
-            DropdownButtonFormField<District>(
-              value: selectedDistrict,
-              items: districts
-                  .map((d) =>
-                  DropdownMenuItem(value: d, child: Text(d.name)))
-                  .toList(),
-              decoration: const InputDecoration(labelText: 'Quận/Huyện'),
-              onChanged: (d) {
+
+            // Quận/Huyện
+            DropdownSearch<String>(
+              popupProps: const PopupProps.menu(
+                showSearchBox: true,
+                searchFieldProps: TextFieldProps(
+                  decoration: InputDecoration(
+                    labelText: "Tìm kiếm",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                menuProps: MenuProps(
+                  backgroundColor: Colors.white,
+                ),
+              ),
+              items: districts,
+              selectedItem: selectedDistrict,
+              enabled: selectedProvince != null, // Chỉ bật khi đã chọn tỉnh
+              dropdownDecoratorProps: const DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(
+                  labelText: "Quận/Huyện",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              onChanged: (district) {
                 setState(() {
-                  selectedDistrict = d;
+                  selectedDistrict = district;
                   selectedWard = null;
-                  wards = VietnamProvinces.getWards(
-                    provinceCode: selectedProvince!.code,
-                    districtCode: d!.code,
-                  );
+                  wards = (selectedProvince != null && district != null)
+                      ? AddressUtils.getWards(selectedProvince!, district)
+                      : [];
                 });
               },
             ),
+
             const SizedBox(height: 12),
-            DropdownButtonFormField<Ward>(
-              value: selectedWard,
-              items: wards
-                  .map((w) =>
-                  DropdownMenuItem(value: w, child: Text(w.name)))
-                  .toList(),
-              decoration: const InputDecoration(labelText: 'Phường/Xã'),
-              onChanged: (w) => setState(() => selectedWard = w),
+
+            // Phường/Xã
+            DropdownSearch<String>(
+              popupProps: const PopupProps.menu(
+                showSearchBox: true,
+                searchFieldProps: TextFieldProps(
+                  decoration: InputDecoration(
+                    labelText: "Tìm kiếm",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
+                menuProps: MenuProps(
+                  backgroundColor: Colors.white,
+                ),
+              ),
+              items: wards,
+              selectedItem: selectedWard,
+              enabled: selectedDistrict != null, // Chỉ bật khi đã chọn huyện
+              // Hiển thị tên phường (bỏ mã)
+              itemAsString: (ward) => ward?.split('-').first ?? '',
+              dropdownDecoratorProps: const DropDownDecoratorProps(
+                dropdownSearchDecoration: InputDecoration(
+                  labelText: "Phường/Xã",
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              onChanged: (ward) {
+                setState(() {
+                  selectedWard = ward;
+                });
+              },
             ),
+
             const SizedBox(height: 12),
             TextField(
               controller: detailAddressController,
               decoration: const InputDecoration(
-                  labelText: 'Thôn/Xóm/Ngõ/Số nhà'),
+                  labelText: 'Thôn/Xóm/Ngõ/Số nhà',
+                  border: OutlineInputBorder()),
             ),
             const SizedBox(height: 24),
             ElevatedButton(

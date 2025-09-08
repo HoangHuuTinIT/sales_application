@@ -118,7 +118,7 @@ class BuyProductsService {
     final normalizedName = removeDiacritics(name).toLowerCase().trim();
 
     // Chuẩn hóa phương thức thanh toán
-    final String pm = paymentMethod == 'Thanh toán khi nhận hàng' ? 'COD' : 'Stripe';
+    final String pm = paymentMethod == 'Thanh toán khi nhận hàng' ? 'COD' : 'Đã thanh toán';
 
     // Làm giàu dữ liệu sản phẩm
     final List<Map<String, dynamic>> enriched = [];

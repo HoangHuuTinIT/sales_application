@@ -223,7 +223,7 @@ class _SettingShippingCompanyForOrderScreenState extends State<SettingShippingCo
                         );
                         if (feeData != null) {
                           setState(() {
-                            partnerShippingFee = feeData['standardTotalFee'];
+                            partnerShippingFee = feeData['price'];
                             codAmount = widget.totalPrice + shippingFee - prePaid;
                             isWeightChanged = false; // ✅ đã tính lại → reset flag
                           });

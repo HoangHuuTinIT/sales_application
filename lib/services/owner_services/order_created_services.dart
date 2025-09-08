@@ -221,7 +221,7 @@ class OrderCreatedServices {
       final digest = base64.encode(digestMd5.bytes);
 
       final url = Uri.parse(
-          "https://demoopenapi.jtexpress.vn/webopenplatformapi/api/order/cancelOrder");
+          "https://ylopenapi.jtexpress.vn/webopenplatformapi/api/order/cancelOrder");
 
       final response = await http.post(
         url,
@@ -322,7 +322,7 @@ class OrderCreatedServices {
       final digest = base64.encode(digestMd5.bytes);
 
       final url = Uri.parse(
-          "https://demoopenapi.jtexpress.vn/webopenplatformapi/api/logistics/trace");
+          "https://ylopenapi.jtexpress.vn/webopenplatformapi/api/logistics/trace");
 
       final response = await http.post(
         url,
@@ -720,10 +720,10 @@ class OrderCreatedServices {
         value: "copy_cod",
         child: Text("Copy số tiền COD"),
       ),
-      const PopupMenuItem(
-        value: "print",
-        child: Text("In vận đơn"),
-      ),
+      // const PopupMenuItem(
+      //   value: "print",
+      //   child: Text("In vận đơn"),
+      // ),
     ];
   }
   Future<void> handleMenuSelection(BuildContext context, String value, Map<String, dynamic> order) async {

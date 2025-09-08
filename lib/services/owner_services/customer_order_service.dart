@@ -436,19 +436,19 @@ print('bizconten ne: $bizContentStr');
     final digestSrc = utf8.encode(bizContentStr + privateKey!);
     final md5Digest = md5.convert(digestSrc).bytes;
     final digest = base64Encode(md5Digest);
-
+    var apiAccount= dotenv.env['API_ACCOUNT'];
     // Timestamp
     final timestamp = DateTime.now().millisecondsSinceEpoch;
 
     // Gửi request
     final url =
-        "https://demoopenapi.jtexpress.vn/webopenplatformapi/api/order/addOrder";
+        "https://ylopenapi.jtexpress.vn/webopenplatformapi/api/order/addOrder";
     final res = await http.post(
       Uri.parse(url),
       headers: {
         "digest": digest,
         "timestamp": "$timestamp",
-        "apiAccount": jt["apiAccount"],
+        "apiAccount": apiAccount??'',
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body: {"bizContent": bizContentStr},
@@ -618,9 +618,9 @@ print('bizconten ne: $bizContentStr');
         print("Json body ne:$body");
         final data = body['data'];
         if (data != null) {
-          final standardTotalFee = (data['standardTotalFee'] ?? 0).toDouble();
+          final price = (data['price'] ?? 0).toDouble();
           return {
-            "standardTotalFee":standardTotalFee,
+            "price":price,
           };
         }
       }

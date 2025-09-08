@@ -32,13 +32,14 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _detailAddressController = TextEditingController();
-
+  late Future<void> _addressDataFuture;
 
 
   @override
   void initState() {
     super.initState();
-    AddressUtils.loadAddressJson();
+    // AddressUtils.loadAddressJson();
+    _addressDataFuture = AddressUtils.loadAddressJson();
   }
 
 
@@ -108,11 +109,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
     // Địa chỉ lưu lên Firestore dạng "địa chỉ chi tiết - Xã - Huyện - Tỉnh"
     final address = AddressUtils.buildFullAddress(
       addressDetail: detailAddress,
-      ward: _selectedWardCustomer!,
-      district: _selectedDistrictCustomer!,
-      province: _selectedProvinceCustomer!,
+      ward: _selectedWardOwner!,
+      district: _selectedDistrictOwner!,
+      province: _selectedProvinceOwner!,
     );
-
     // Chuyển sang màn VerifyPhoneNumber, đợi xác minh xong mới lưu Firestore
     final phoneNumber = await Navigator.push<String?>(
       context,
@@ -152,44 +152,58 @@ class _SignUpScreenState extends State<SignUpScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(title: const Text("Tạo tài khoản")),
-      body: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // Toggle chọn loại đăng ký
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+      // ✅ Bước 3: Sử dụng FutureBuilder
+      body: FutureBuilder(
+        future: _addressDataFuture,
+        builder: (context, snapshot) {
+          // Trường hợp 1: Đang tải dữ liệu
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          // Trường hợp 2: Tải bị lỗi
+          if (snapshot.hasError) {
+            return Center(child: Text("Lỗi tải dữ liệu địa chỉ: ${snapshot.error}"));
+          }
+
+          // Trường hợp 3: Tải thành công -> Xây dựng giao diện chính
+          return Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
               children: [
-                ChoiceChip(
-                  label: const Text('Bán hàng'),
-                  selected: _selectedType == SignUpType.owner,
-                  onSelected: (_) {
-                    setState(() => _selectedType = SignUpType.owner);
-                  },
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Bán hàng'),
+                      selected: _selectedType == SignUpType.owner,
+                      onSelected: (_) {
+                        setState(() => _selectedType = SignUpType.owner);
+                      },
+                    ),
+                    const SizedBox(width: 16),
+                    ChoiceChip(
+                      label: const Text('Khách hàng'),
+                      selected: _selectedType == SignUpType.customer,
+                      onSelected: (_) {
+                        setState(() => _selectedType = SignUpType.customer);
+                      },
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 16),
-                ChoiceChip(
-                  label: const Text('Khách hàng'),
-                  selected: _selectedType == SignUpType.customer,
-                  onSelected: (_) {
-                    setState(() => _selectedType = SignUpType.customer);
-                  },
+                const SizedBox(height: 20),
+                Expanded(
+                  child: _selectedType == SignUpType.owner
+                      ? _buildOwnerSignUp()
+                      : _buildCustomerSignUp(),
                 ),
               ],
             ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: _selectedType == SignUpType.owner
-                  ? _buildOwnerSignUp()
-                  : _buildCustomerSignUp(),
-            ),
-
-          ],
-        ),
+          );
+        },
       ),
     );
   }
-
   Widget _buildCustomerSignUp() {
     return SingleChildScrollView(
       child: Form(

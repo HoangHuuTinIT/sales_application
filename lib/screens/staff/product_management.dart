@@ -433,77 +433,76 @@ class _ProductManagementScreenState extends State<ProductManagementScreen> {
               const SizedBox(height: 8),
 
               // Trường giảm giá cũng chuyển thành TextField không validator
-              TextField(
-                controller: _discountController,
-                decoration: const InputDecoration(labelText: 'Giảm giá (%)'),
-                keyboardType: TextInputType.number,
-                onChanged: (value) {
-                  final parsed = double.tryParse(value);
-                  if (value.trim().isEmpty || parsed == null || parsed <= 0) {
-                    setState(() {
-                      _discountStartDate = null;
-                      _discountEndDate = null;
-                    });
-                  } else {
-                    setState(() {}); // rebuild nút
-                  }
-                },
-              ),
-              const SizedBox(height: 8),
-
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: (_discountController.text.trim().isNotEmpty &&
-                          double.tryParse(_discountController.text.trim()) != null &&
-                          double.parse(_discountController.text.trim()) > 0)
-                          ? () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _discountStartDate = picked;
-                          });
-                        }
-                      }
-                          : null,
-                      child: Text(_discountStartDate == null
-                          ? 'Chọn ngày bắt đầu'
-                          : 'Từ: ${DateFormat('dd/MM/yyyy').format(_discountStartDate!)}'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: (_discountController.text.trim().isNotEmpty &&
-                          double.tryParse(_discountController.text.trim()) != null &&
-                          double.parse(_discountController.text.trim()) > 0)
-                          ? () async {
-                        final picked = await showDatePicker(
-                          context: context,
-                          initialDate: DateTime.now(),
-                          firstDate: DateTime(2000),
-                          lastDate: DateTime(2100),
-                        );
-                        if (picked != null) {
-                          setState(() {
-                            _discountEndDate = picked;
-                          });
-                        }
-                      }
-                          : null,
-                      child: Text(_discountEndDate == null
-                          ? 'Chọn ngày kết thúc'
-                          : 'Đến: ${DateFormat('dd/MM/yyyy').format(_discountEndDate!)}'),
-                    ),
-                  ),
-                ],
-              ),
+              // TextField(
+              //   controller: _discountController,
+              //   decoration: const InputDecoration(labelText: 'Giảm giá (%)'),
+              //   keyboardType: TextInputType.number,
+              //   onChanged: (value) {
+              //     final parsed = double.tryParse(value);
+              //     if (value.trim().isEmpty || parsed == null || parsed <= 0) {
+              //       setState(() {
+              //         _discountStartDate = null;
+              //         _discountEndDate = null;
+              //       });
+              //     } else {
+              //       setState(() {}); // rebuild nút
+              //     }
+              //   },
+              // ),
+              // const SizedBox(height: 8),
+              // Row(
+              //   children: [
+              //     Expanded(
+              //       child: ElevatedButton(
+              //         onPressed: (_discountController.text.trim().isNotEmpty &&
+              //             double.tryParse(_discountController.text.trim()) != null &&
+              //             double.parse(_discountController.text.trim()) > 0)
+              //             ? () async {
+              //           final picked = await showDatePicker(
+              //             context: context,
+              //             initialDate: DateTime.now(),
+              //             firstDate: DateTime(2000),
+              //             lastDate: DateTime(2100),
+              //           );
+              //           if (picked != null) {
+              //             setState(() {
+              //               _discountStartDate = picked;
+              //             });
+              //           }
+              //         }
+              //             : null,
+              //         child: Text(_discountStartDate == null
+              //             ? 'Chọn ngày bắt đầu'
+              //             : 'Từ: ${DateFormat('dd/MM/yyyy').format(_discountStartDate!)}'),
+              //       ),
+              //     ),
+              //     const SizedBox(width: 8),
+              //     Expanded(
+              //       child: ElevatedButton(
+              //         onPressed: (_discountController.text.trim().isNotEmpty &&
+              //             double.tryParse(_discountController.text.trim()) != null &&
+              //             double.parse(_discountController.text.trim()) > 0)
+              //             ? () async {
+              //           final picked = await showDatePicker(
+              //             context: context,
+              //             initialDate: DateTime.now(),
+              //             firstDate: DateTime(2000),
+              //             lastDate: DateTime(2100),
+              //           );
+              //           if (picked != null) {
+              //             setState(() {
+              //               _discountEndDate = picked;
+              //             });
+              //           }
+              //         }
+              //             : null,
+              //         child: Text(_discountEndDate == null
+              //             ? 'Chọn ngày kết thúc'
+              //             : 'Đến: ${DateFormat('dd/MM/yyyy').format(_discountEndDate!)}'),
+              //       ),
+              //     ),
+              //   ],
+              // ),
               const SizedBox(height: 8),
 
               buildTextField(

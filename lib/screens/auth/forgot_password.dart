@@ -111,7 +111,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                       ),
                     )
                         : const Text(
-                      "Gửi email",
+                      "Gửi yêu cầu",
                       style: TextStyle(fontSize: 16),
                     ),
                   ),

@@ -1,29 +1,41 @@
+import 'package:ban_hang/services/utilities/utilities_address.dart';
 import 'package:flutter/material.dart';
-import 'package:vietnam_provinces/vietnam_provinces.dart';
+import 'package:dropdown_search/dropdown_search.dart'; // Import package mới
 import 'package:ban_hang/services/customer_services/edit_information_for_order_services.dart';
+
+// import 'package:vietnam_provinces/vietnam_provinces.dart'; // Xóa import cũ
 
 class EditInformationForOrderScreen extends StatefulWidget {
   const EditInformationForOrderScreen({Key? key}) : super(key: key);
 
   @override
-  State<EditInformationForOrderScreen> createState() => _EditInformationForOrderScreenState();
+  State<EditInformationForOrderScreen> createState() =>
+      _EditInformationForOrderScreenState();
 }
 
-class _EditInformationForOrderScreenState extends State<EditInformationForOrderScreen> {
+class _EditInformationForOrderScreenState
+    extends State<EditInformationForOrderScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _phoneController = TextEditingController();
   final _detailAddressController = TextEditingController();
 
-  Province? selectedProvince;
-  District? selectedDistrict;
-  Ward? selectedWard;
+  // --- Thay đổi kiểu dữ liệu State Variables ---
+  String? selectedProvince;
+  String? selectedDistrict;
+  String? selectedWard;
+
+  List<String> provinces = [];
+  List<String> districts = [];
+  List<String> wards = [];
 
   bool _isLoading = true;
 
   @override
   void initState() {
     super.initState();
+    // Lấy danh sách tỉnh từ AddressUtils
+    provinces = AddressUtils.getProvinces();
     _loadData();
   }
 
@@ -35,28 +47,27 @@ class _EditInformationForOrderScreenState extends State<EditInformationForOrderS
       _phoneController.text = userData['phone'] ?? '';
 
       if (userData['address'] != null) {
-        final parts = userData['address'].split(' - ');
-        if (parts.length == 4) {
-          _detailAddressController.text = parts[0];
+        // Sử dụng helper từ AddressUtils để phân tích địa chỉ
+        final parsedAddress = AddressUtils.parseFullAddress(userData['address']);
 
-          final wardName = parts[1];
-          final districtName = parts[2];
-          final provinceName = parts[3];
+        if (parsedAddress.isNotEmpty) {
+          _detailAddressController.text = parsedAddress['addressDetail'] ?? '';
+          selectedProvince = parsedAddress['province'];
 
-          // Tìm province
-          selectedProvince = VietnamProvinces.getProvinces()
-              .firstWhere((p) => p.name == provinceName, orElse: () => VietnamProvinces.getProvinces().first);
+          if (selectedProvince != null) {
+            districts = AddressUtils.getDistricts(selectedProvince!);
+            selectedDistrict = parsedAddress['district'];
+          }
 
-          // Tìm district
-          final districts = VietnamProvinces.getDistricts(provinceCode: selectedProvince!.code);
-          selectedDistrict = districts.firstWhere((d) => d.name == districtName, orElse: () => districts.first);
-
-          // Tìm ward
-          final wards = VietnamProvinces.getWards(
-            provinceCode: selectedProvince!.code,
-            districtCode: selectedDistrict!.code,
-          );
-          selectedWard = wards.firstWhere((w) => w.name == wardName, orElse: () => wards.first);
+          if (selectedProvince != null && selectedDistrict != null) {
+            wards = AddressUtils.getWards(selectedProvince!, selectedDistrict!);
+            // Vì địa chỉ lưu tên phường, cần tìm lại item đầy đủ (có mã) trong list wards
+            selectedWard = AddressUtils.findWardByName(
+              province: selectedProvince!,
+              district: selectedDistrict!,
+              wardName: parsedAddress['ward'] ?? '',
+            );
+          }
         }
       }
     }
@@ -67,8 +78,15 @@ class _EditInformationForOrderScreenState extends State<EditInformationForOrderS
   Future<void> _saveData() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final address =
-        "${_detailAddressController.text} - ${selectedWard?.name} - ${selectedDistrict?.name} - ${selectedProvince?.name}";
+    setState(() => _isLoading = true);
+
+    // Sử dụng helper từ AddressUtils để tạo chuỗi địa chỉ hoàn chỉnh
+    final address = AddressUtils.buildFullAddress(
+      addressDetail: _detailAddressController.text.trim(),
+      ward: selectedWard ?? '',
+      district: selectedDistrict ?? '',
+      province: selectedProvince ?? '',
+    );
 
     await EditInformationForOrderService().updateUserData(
       name: _nameController.text.trim(),
@@ -76,7 +94,13 @@ class _EditInformationForOrderScreenState extends State<EditInformationForOrderS
       address: address,
     );
 
-    Navigator.pop(context); // Quay lại màn trước
+    // Hiển thị thông báo thành công (tùy chọn)
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cập nhật thông tin thành công!')),
+      );
+      Navigator.pop(context); // Quay lại màn trước
+    }
   }
 
   @override
@@ -93,85 +117,105 @@ class _EditInformationForOrderScreenState extends State<EditInformationForOrderS
             children: [
               TextFormField(
                 controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Họ và tên'),
-                validator: (value) => value!.isEmpty ? 'Vui lòng nhập tên' : null,
+                decoration: const InputDecoration(labelText: 'Họ và tên', border: OutlineInputBorder()),
+                validator: (value) =>
+                value!.isEmpty ? 'Vui lòng nhập tên' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               TextFormField(
                 controller: _phoneController,
-                decoration: const InputDecoration(labelText: 'Số điện thoại'),
+                decoration: const InputDecoration(labelText: 'Số điện thoại', border: OutlineInputBorder()),
                 keyboardType: TextInputType.phone,
-                validator: (value) => value!.isEmpty ? 'Vui lòng nhập SĐT' : null,
+                validator: (value) =>
+                value!.isEmpty ? 'Vui lòng nhập SĐT' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-              // Province dropdown
-              DropdownButtonFormField<Province>(
-                value: selectedProvince,
-                hint: const Text('Chọn tỉnh/thành'),
-                items: VietnamProvinces.getProvinces().map((p) {
-                  return DropdownMenuItem(value: p, child: Text(p.name));
-                }).toList(),
+              // --- Thay thế bằng DropdownSearch ---
+
+              // Tỉnh/Thành phố
+              DropdownSearch<String>(
+                popupProps: const PopupProps.menu(showSearchBox: true, searchFieldProps: TextFieldProps(decoration: InputDecoration(labelText: "Tìm kiếm"))),
+                items: provinces,
+                selectedItem: selectedProvince,
+                dropdownDecoratorProps: const DropDownDecoratorProps(
+                  dropdownSearchDecoration: InputDecoration(
+                    labelText: "Tỉnh/Thành phố",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
                 onChanged: (value) {
                   setState(() {
                     selectedProvince = value;
                     selectedDistrict = null;
                     selectedWard = null;
+                    districts = value != null ? AddressUtils.getDistricts(value) : [];
+                    wards = [];
                   });
                 },
-                validator: (value) => value == null ? 'Chọn tỉnh' : null,
+                validator: (value) => value == null ? 'Vui lòng chọn tỉnh/thành phố' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-              // District dropdown
-              DropdownButtonFormField<District>(
-                value: selectedDistrict,
-                hint: const Text('Chọn quận/huyện'),
-                items: selectedProvince == null
-                    ? []
-                    : VietnamProvinces.getDistricts(
-                  provinceCode: selectedProvince!.code,
-                ).map((d) {
-                  return DropdownMenuItem(value: d, child: Text(d.name));
-                }).toList(),
+              // Quận/Huyện
+              DropdownSearch<String>(
+                popupProps: const PopupProps.menu(showSearchBox: true, searchFieldProps: TextFieldProps(decoration: InputDecoration(labelText: "Tìm kiếm"))),
+                items: districts,
+                selectedItem: selectedDistrict,
+                enabled: selectedProvince != null,
+                dropdownDecoratorProps: const DropDownDecoratorProps(
+                  dropdownSearchDecoration: InputDecoration(
+                    labelText: "Quận/Huyện",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
                 onChanged: (value) {
                   setState(() {
                     selectedDistrict = value;
                     selectedWard = null;
+                    wards = (selectedProvince != null && value != null)
+                        ? AddressUtils.getWards(selectedProvince!, value)
+                        : [];
                   });
                 },
-                validator: (value) => value == null ? 'Chọn huyện' : null,
+                validator: (value) => value == null ? 'Vui lòng chọn quận/huyện' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-              // Ward dropdown
-              DropdownButtonFormField<Ward>(
-                value: selectedWard,
-                hint: const Text('Chọn xã/phường'),
-                items: selectedDistrict == null
-                    ? []
-                    : VietnamProvinces.getWards(
-                  provinceCode: selectedProvince!.code,
-                  districtCode: selectedDistrict!.code,
-                ).map((w) {
-                  return DropdownMenuItem(value: w, child: Text(w.name));
-                }).toList(),
+              // Phường/Xã
+              DropdownSearch<String>(
+                popupProps: const PopupProps.menu(showSearchBox: true, searchFieldProps: TextFieldProps(decoration: InputDecoration(labelText: "Tìm kiếm"))),
+                items: wards,
+                selectedItem: selectedWard,
+                enabled: selectedDistrict != null,
+                itemAsString: (item) => item?.split('-').first ?? '', // Chỉ hiển thị tên phường/xã
+                dropdownDecoratorProps: const DropDownDecoratorProps(
+                  dropdownSearchDecoration: InputDecoration(
+                    labelText: "Phường/Xã",
+                    border: OutlineInputBorder(),
+                  ),
+                ),
                 onChanged: (value) {
                   setState(() => selectedWard = value);
                 },
-                validator: (value) => value == null ? 'Chọn xã' : null,
+                validator: (value) => value == null ? 'Vui lòng chọn phường/xã' : null,
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
 
-              // Detail address
+              // Địa chỉ chi tiết
               TextFormField(
                 controller: _detailAddressController,
-                decoration: const InputDecoration(labelText: 'Địa chỉ chi tiết'),
-                validator: (value) => value!.isEmpty ? 'Vui lòng nhập địa chỉ chi tiết' : null,
+                decoration: const InputDecoration(labelText: 'Địa chỉ chi tiết (số nhà, tên đường...)', border: OutlineInputBorder()),
+                validator: (value) =>
+                value!.isEmpty ? 'Vui lòng nhập địa chỉ chi tiết' : null,
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 24),
 
               ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
                 onPressed: _saveData,
                 child: const Text('Lưu thay đổi'),
               ),

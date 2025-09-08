@@ -73,8 +73,8 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('❌ Lỗi: $e'), backgroundColor: Colors.red),
       );
-    } finally {
-      setState(() => _isSubmitting = false);
+      // Ném lại lỗi để khối ngoài bắt được nếu cần
+      rethrow;
     }
   }
 
@@ -221,44 +221,75 @@ class _BuyProductsScreenState extends State<BuyProductsScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+                        // Giữ nguyên phần vô hiệu hóa nút
                         onPressed: _isSubmitting
                             ? null
                             : () async {
-                          if (paymentMethod == 'Chuyển khoản ngân hàng') {
-                            final stripeService = StripePaymentService();
-                            if (total < 13000) {
-                              message.showSnackbarfalse(context, "CHỈ ÁP DỤNG VỚI ĐƠN HÀNG CÓ GIÁ TRỊ TỪ 13.000 VND TRỞ LÊN");
-                              return;
-                            }
-                            final success = await stripeService.processPayment(total);
-                            if (success) {
-                              // ✅ Lưu đơn hàng vào Firestore
-                              final buyProductsService = BuyProductsService();
-                              await buyProductsService.createOrders(
-                                selectedItems: widget.selectedItems,
-                                paymentMethod: 'Chuyển khoản ngân hàng',
-                              );
-                              message.showSnackbartrue(context, 'Đơn hàng đã được ghi nhận và thanh toán thành công');
-                              Navigator.pushAndRemoveUntil(
-                                context,
-                                MaterialPageRoute(builder: (_) => HomeCustomer()),
-                                    (route) => false,
-                              );
+                          // ✅ BẬT LOADING NGAY LẬP TỨC
+                          setState(() {
+                            _isSubmitting = true;
+                          });
+
+                          try {
+                            if (paymentMethod == 'Chuyển khoản ngân hàng') {
+                              final stripeService = StripePaymentService();
+                              if (total < 13000) {
+                                message.showSnackbarfalse(context, "CHỈ ÁP DỤNG VỚI ĐƠN HÀNG CÓ GIÁ TRỊ TỪ 13.000 VND TRỞ LÊN");
+                                // Phải return để dừng hàm
+                                return;
+                              }
+                              final success = await stripeService.processPayment(total);
+                              if (success) {
+                                final buyProductsService = BuyProductsService();
+                                await buyProductsService.createOrders(
+                                  selectedItems: widget.selectedItems,
+                                  paymentMethod: 'Chuyển khoản ngân hàng',
+                                );
+                                message.showSnackbartrue(context, 'Đơn hàng đã được ghi nhận và thanh toán thành công');
+                                Navigator.pushAndRemoveUntil(
+                                  context,
+                                  MaterialPageRoute(builder: (_) => HomeCustomer()),
+                                      (route) => false,
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text('Bạn chưa hoàn tất thanh toán'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
                             } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Bạn chưa hoàn tất thanh toán'),
-                                  backgroundColor: Colors.red,
-                                ),
-                              );
+                              // Hàm này giờ không còn setState nữa
+                              await _submitOrders();
                             }
-                          }
-                          else {
-                            await _submitOrders(); // COD
+                          } catch (e) {
+                            // Bắt các lỗi có thể xảy ra trong quá trình xử lý
+                            print("Đã xảy ra lỗi khi đặt hàng: $e");
+                          } finally {
+                            // ✅ TẮT LOADING KHI MỌI THỨ KẾT THÚC
+                            // Dùng `if (mounted)` để đảm bảo an toàn nếu người dùng thoát màn hình
+                            if (mounted) {
+                              setState(() {
+                                _isSubmitting = false;
+                              });
+                            }
                           }
                         },
+                        // Giao diện nút không cần thay đổi
                         child: _isSubmitting
-                            ? const CircularProgressIndicator(color: Colors.white)
+                            ? const Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            ),
+                            SizedBox(width: 12),
+                            Text('ĐANG XỬ LÝ...'),
+                          ],
+                        )
                             : const Text('ĐẶT HÀNG', style: TextStyle(fontSize: 16)),
                       ),
                     ),

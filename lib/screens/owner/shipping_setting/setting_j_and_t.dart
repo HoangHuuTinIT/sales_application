@@ -30,7 +30,7 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
   // nâng cao
   String orderType = "1";
   String serviceType = "1";
-  String payType = "CC_CASH";
+  String payType = "PP_CASH";
   String productType = "EXPRESS";
   String goodsType = "bm000010";
   String deliveryType = "1";
@@ -195,11 +195,13 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        TextField(controller: customerCodeController, decoration: const InputDecoration(labelText: "Customer Code")),
+        TextField(controller: customerCodeController, decoration: const InputDecoration(labelText: "Mã người dùng")),
+        const SizedBox(height: 12,),
         TextField(controller: keyController, decoration: const InputDecoration(labelText: "Key") , obscureText: true,),
         // TextField(controller: passwordController, decoration: const InputDecoration(labelText: "Password"), obscureText: true),
         const SizedBox(height: 12),
         TextField(controller: nameController, decoration: const InputDecoration(labelText: "Tên người gửi")),
+        const SizedBox(height: 12,),
         TextField(controller: mobileController, decoration: const InputDecoration(labelText: "SĐT người gửi")),
         const SizedBox(height: 12),
 
@@ -274,6 +276,7 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
               ],
               onChanged: (val) => setState(() => orderType = val!),
             ),
+           const SizedBox(height: 12,),
             DropdownButtonFormField(
               value: serviceType,
               decoration: const InputDecoration(labelText: "Loại dịch vụ"),
@@ -283,6 +286,7 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
               ],
               onChanged: (val) => setState(() => serviceType = val!),
             ),
+            const SizedBox(height: 12,),
             DropdownButtonFormField(
               value: payType,
               decoration: const InputDecoration(labelText: "Phương thức thanh toán"),
@@ -293,6 +297,7 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
               ],
               onChanged: (val) => setState(() => payType = val!),
             ),
+            const SizedBox(height: 12,),
             DropdownButtonFormField(
               value: productType,
               decoration: const InputDecoration(labelText: "Loại vận chuyển"),
@@ -303,6 +308,7 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
               ],
               onChanged: (val) => setState(() => productType = val!),
             ),
+            const SizedBox(height: 12,),
             DropdownButtonFormField(
               value: goodsType,
               decoration: const InputDecoration(labelText: "Loại hàng hóa"),
@@ -313,6 +319,7 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
               ],
               onChanged: (val) => setState(() => goodsType = val!),
             ),
+            const SizedBox(height: 12,),
             DropdownButtonFormField(
               value: deliveryType,
               decoration: const InputDecoration(labelText: "Loại phát hàng"),
@@ -322,6 +329,7 @@ class _SettingJAndTScreenState extends State<SettingJAndTScreen> {
               ],
               onChanged: (val) => setState(() => deliveryType = val!),
             ),
+            const SizedBox(height: 12,),
             DropdownButtonFormField(
               value: isInsured,
               decoration: const InputDecoration(labelText: "Khai giá"),

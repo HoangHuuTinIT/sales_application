@@ -10,14 +10,14 @@ class OwnerSettingScreen extends StatelessWidget {
       appBar: AppBar(title: const Text('Cài đặt chủ cửa hàng')),
       body: ListView(
         children: [
-          ListTile(
-            leading: const Icon(Icons.print),
-            title: const Text('Cài đặt máy in'),
-            trailing: const Icon(Icons.chevron_right),
-            onTap: () {
-              Navigator.pushNamed(context, '/list-printer');
-            },
-          ),
+          // ListTile(
+          //   leading: const Icon(Icons.print),
+          //   title: const Text('Cài đặt máy in'),
+          //   trailing: const Icon(Icons.chevron_right),
+          //   onTap: () {
+          //     Navigator.pushNamed(context, '/list-printer');
+          //   },
+          // ),
           ListTile(
             leading: const Icon(Icons.local_shipping),
             title: const Text('Cài đặt hãng vận chuyển'),
